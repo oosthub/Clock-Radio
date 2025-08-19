@@ -26,8 +26,10 @@ Audio audio;
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // I2C address, columns, rows
 
 // Wifi Credentials
-String ssid =    "OOSIE";
-String password = "N0t4UF@tB0y";
+// String ssid =    "OOSIE";
+// String password = "N0t4UF@tB0y";
+String ssid = "";
+String password = "";
 
 // Encoder variables
 volatile int volume = 5;  // Start volume at 5
@@ -43,7 +45,8 @@ enum MenuState {
   MENU_VOLUME = 0,
   MENU_STREAMS = 1,
   MENU_BRIGHTNESS = 2,
-  MENU_COUNT = 3
+  MENU_WIFI = 3,
+  MENU_COUNT = 4
 };
 
 MenuState currentMenu = MENU_VOLUME;
@@ -52,6 +55,19 @@ unsigned long lastMenuActivity = 0;
 const unsigned long MENU_TIMEOUT = 5000;  // 5 seconds timeout
 int currentStreamIndex = 0;
 bool brightnessChanged = false; // Flag to update backlight in main loop
+
+// WiFi menu variables
+enum WiFiMenuState {
+  WIFI_MENU_SSID = 0,
+  WIFI_MENU_PASSWORD = 1,
+  WIFI_MENU_RESET = 2,
+  WIFI_MENU_COUNT = 3
+};
+
+WiFiMenuState currentWiFiMenu = WIFI_MENU_SSID;
+bool inWiFiMenu = false;
+bool showingConfirmation = false;
+bool confirmationChoice = false; // false = No (default), true = Yes
 
 // Stream definitions
 struct RadioStream {
@@ -66,6 +82,18 @@ RadioStream streams[] = {
   {"Groot FM", "https://edge.iono.fm/xice/330_medium.aac"},
   {"RSG", "https://28553.live.streamtheworld.com/RSGAAC.aac"}
 };
+
+byte backspaceSymbol[8] = {
+  0b00000,
+  0b00100,
+  0b01100,
+  0b11111,
+  0b01100,
+  0b00100,
+  0b00000,
+  0b00000
+};
+
 
 int currentStream = 0;
 int playingStream = 0;  // Track which stream is actually playing
@@ -95,6 +123,16 @@ unsigned long lastActivity = 0;
 const unsigned long BACKLIGHT_TIMEOUT = 5000;  // 5 seconds
 bool backlightAlwaysOn = true;  // true = always on, false = auto-off mode
 
+// WiFi configuration variables
+bool wifiConfigMode = false;
+bool configuringSSID = true;  // true = SSID, false = Password
+int charIndex = 0;  // Current character position in string
+int selectedChar = 0;  // Current selected character from alphabet
+String inputSSID = "";
+String inputPassword = "";
+const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz!@#$%^&*()-_=+[]{}|;:,.<>?/ ";
+const int charsetSize = sizeof(charset) - 1;
+
 // NTP time settings
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 7200;     // GMT+2 for South Africa (adjust as needed)
@@ -102,7 +140,7 @@ const int daylightOffset_sec = 0;    // No daylight saving
 
 // EEPROM settings
 #define EEPROM_SIZE 512
-#define SETTINGS_VERSION 1
+#define SETTINGS_VERSION 2  // Increment version for new WiFi fields
 #define EEPROM_ADDR_VERSION 0
 #define EEPROM_ADDR_VOLUME 1
 #define EEPROM_ADDR_STREAM 2
@@ -113,6 +151,8 @@ struct Settings {
   int volume;
   int currentStream;
   bool backlightAlwaysOn;
+  char wifiSSID[32];
+  char wifiPassword[64];
 };
 
 // Forward declarations
@@ -127,6 +167,63 @@ void setupTime();
 void saveSettings();
 void loadSettings();
 void initializeEEPROM();
+void configureWiFi();
+void updateWiFiConfigDisplay();
+bool connectToWiFi();
+void resetWiFiConfig();
+bool checkButtonPress();
+bool checkLongButtonPress();
+void updateSelectedCharForPosition();
+String maskPassword(String pwd);
+void enterWiFiMenu();
+void exitWiFiMenu();
+void nextWiFiMenuItem();
+void handleWiFiMenuSelection();
+void resetWiFiSettings();
+
+// Function to mask password showing only last 2 characters
+String maskPassword(String pwd) {
+  if (pwd.length() <= 2) {
+    return pwd; // Show short passwords completely
+  }
+  String masked = "";
+  for (int i = 0; i < pwd.length() - 2; i++) {
+    masked += "*";
+  }
+  masked += pwd.substring(pwd.length() - 2);
+  return masked;
+}
+
+// Function to update selected character based on current position
+void updateSelectedCharForPosition() {
+  if (configuringSSID) {
+    if (charIndex < inputSSID.length()) {
+      // Position has existing character, find its index in charset
+      char existingChar = inputSSID.charAt(charIndex);
+      for (int i = 0; i < charsetSize; i++) {
+        if (charset[i] == existingChar) {
+          selectedChar = i;
+          return;
+        }
+      }
+      // If character not found in charset (shouldn't happen), keep current selection
+    }
+    // Position is empty or character not found, keep current selectedChar
+  } else {
+    if (charIndex < inputPassword.length()) {
+      // Position has existing character, find its index in charset
+      char existingChar = inputPassword.charAt(charIndex);
+      for (int i = 0; i < charsetSize; i++) {
+        if (charset[i] == existingChar) {
+          selectedChar = i;
+          return;
+        }
+      }
+      // If character not found in charset (shouldn't happen), keep current selection
+    }
+    // Position is empty or character not found, keep current selectedChar
+  }
+}
 
 // LCD Functions
 void scanI2C() {
@@ -202,6 +299,12 @@ void saveSettings() {
   settings.currentStream = currentStream;
   settings.backlightAlwaysOn = backlightAlwaysOn;
   
+  // Save WiFi credentials
+  strncpy(settings.wifiSSID, ssid.c_str(), sizeof(settings.wifiSSID) - 1);
+  settings.wifiSSID[sizeof(settings.wifiSSID) - 1] = '\0';
+  strncpy(settings.wifiPassword, password.c_str(), sizeof(settings.wifiPassword) - 1);
+  settings.wifiPassword[sizeof(settings.wifiPassword) - 1] = '\0';
+  
   EEPROM.put(0, settings);
   EEPROM.commit();
 }
@@ -217,6 +320,10 @@ void loadSettings() {
     currentStream = settings.currentStream;
     backlightAlwaysOn = settings.backlightAlwaysOn;
     
+    // Load WiFi credentials
+    ssid = String(settings.wifiSSID);
+    password = String(settings.wifiPassword);
+    
     // Validate loaded values
     if (volume < 0) volume = 5;
     if (volume > 80) volume = 80;
@@ -229,17 +336,327 @@ void loadSettings() {
     Serial.println(currentStream);
     Serial.print("  Backlight Always On: ");
     Serial.println(backlightAlwaysOn ? "true" : "false");
+    Serial.print("  WiFi SSID: ");
+    Serial.println(ssid.length() > 0 ? ssid : "Not configured");
+    Serial.print("  WiFi Password: ");
+    Serial.println(password.length() > 0 ? "[Configured]" : "Not configured");
   } else {
     // First time or version mismatch, use defaults and save them
     Serial.println("No valid settings found, using defaults");
     volume = 5;
     currentStream = 0;
     backlightAlwaysOn = true;
+    ssid = "";
+    password = "";
     saveSettings();
   }
 }
 
+// Function to check button state (polling instead of interrupt)
+bool checkButtonPress() {
+  bool currentButtonState = digitalRead(ENCODER_BTN);
+  
+  // Check for state change
+  if (currentButtonState != lastButtonState) {
+    lastButtonState = currentButtonState;
+    
+    // Trigger on press (HIGH to LOW)
+    if (currentButtonState == LOW) {
+      Serial.println("Button pressed!");
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Function to check for long button press (3 seconds)
+bool checkLongButtonPress() {
+  static unsigned long buttonPressStart = 0;
+  static bool buttonWasPressed = false;
+  
+  bool currentButtonState = digitalRead(ENCODER_BTN);
+  
+  if (currentButtonState == LOW && !buttonWasPressed) {
+    // Button just pressed, start timing
+    buttonPressStart = millis();
+    buttonWasPressed = true;
+  } else if (currentButtonState == HIGH && buttonWasPressed) {
+    // Button released
+    buttonWasPressed = false;
+    buttonPressStart = 0;
+  } else if (currentButtonState == LOW && buttonWasPressed) {
+    // Button still pressed, check duration
+    if (millis() - buttonPressStart >= 3000) {
+      // Long press detected
+      buttonWasPressed = false; // Reset to avoid multiple triggers
+      buttonPressStart = 0;
+      Serial.println("Long button press detected!");
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// WiFi Configuration Functions
+void resetWiFiConfig() {
+  inputSSID = "";
+  inputPassword = "";
+  charIndex = 0;
+  selectedChar = 0;
+  configuringSSID = true;
+}
+
+void updateWiFiConfigDisplay() {
+  lcd.clear();
+  
+  if (configuringSSID) {
+    lcd.setCursor(0, 0);
+    lcd.print("SSID: Hold 3s>OK");
+    lcd.setCursor(0, 1);
+    
+    // Build display string with current selection at cursor position
+    String displaySSID = inputSSID;
+    
+    // Ensure string is long enough for cursor position
+    while (displaySSID.length() <= charIndex) {
+      displaySSID += " ";
+    }
+    
+    // Replace character at cursor position with selected character
+    if (selectedChar == charsetSize - 1) {
+      // Show backspace symbol at cursor position
+      displaySSID.setCharAt(charIndex, char(0));  // Custom character 0 (backspace)
+    } else {
+      displaySSID.setCharAt(charIndex, charset[selectedChar]);
+    }
+    
+    // Truncate if too long for display
+    if (displaySSID.length() > 16) {
+      int start = max(0, charIndex - 15);
+      displaySSID = displaySSID.substring(start, start + 16);
+    }
+    lcd.print(displaySSID);
+    
+    // Show cursor at current position
+    int displayCursorPos = min(15, charIndex);
+    if (charIndex >= 16) {
+      displayCursorPos = charIndex - (charIndex - 15);
+    }
+    lcd.setCursor(displayCursorPos, 1);
+    lcd.cursor();
+  } else {
+    lcd.setCursor(0, 0);
+    lcd.print("Pass: Hold 3s>OK");
+    lcd.setCursor(0, 1);
+    
+    // Build display string with current selection at cursor position
+    String displayPwd = inputPassword;
+    
+    // Ensure string is long enough for cursor position
+    while (displayPwd.length() <= charIndex) {
+      displayPwd += " ";
+    }
+    
+    // Replace character at cursor position with selected character
+    if (selectedChar == charsetSize - 1) {
+      // Show backspace symbol at cursor position
+      displayPwd.setCharAt(charIndex, char(0));  // Custom character 0 (backspace)
+    } else {
+      displayPwd.setCharAt(charIndex, charset[selectedChar]);
+    }
+    
+    // Truncate if too long for display
+    if (displayPwd.length() > 16) {
+      int start = max(0, charIndex - 15);
+      displayPwd = displayPwd.substring(start, start + 16);
+    }
+    lcd.print(displayPwd);
+    
+    // Show cursor at current position
+    int displayCursorPos = min(15, charIndex);
+    if (charIndex >= 16) {
+      displayCursorPos = charIndex - (charIndex - 15);
+    }
+    lcd.setCursor(displayCursorPos, 1);
+    lcd.cursor();
+  }
+}
+
+bool connectToWiFi() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Connecting...");
+  lcd.setCursor(0, 1);
+  lcd.print(ssid);
+  
+  WiFi.disconnect();
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid.c_str(), password.c_str());
+  
+  unsigned long startTime = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startTime < 30000) {
+    delay(500);
+    Serial.print(".");
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("WiFi Connected!");
+    lcd.setCursor(0, 1);
+    lcd.print(WiFi.localIP());
+    delay(2000);
+    return true;
+  } else {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Connection Failed");
+    lcd.setCursor(0, 1);
+    lcd.print("Check & correct");
+    delay(3000);
+    return false;
+  }
+}
+
+void configureWiFi() {
+  wifiConfigMode = true;
+  lcd.noCursor();
+  resetWiFiConfig();
+  updateSelectedCharForPosition();  // Set initial character selection
+  
+  Serial.println("Entering WiFi configuration mode");
+  updateWiFiConfigDisplay();
+  
+  while (wifiConfigMode) {
+    // Check if encoder changed and update display immediately
+    if (forceImmediateLcdUpdate) {
+      forceImmediateLcdUpdate = false;
+      updateWiFiConfigDisplay();
+    }
+    
+    // Handle long button press for confirmation
+    if (checkLongButtonPress()) {
+      if (configuringSSID) {
+        if (inputSSID.length() > 0) {
+          // Confirm SSID and move to password
+          ssid = inputSSID;
+          configuringSSID = false;
+          charIndex = 0;
+          updateSelectedCharForPosition();  // Set character based on password content
+          Serial.println("SSID confirmed, moving to password");
+        }
+      } else {
+        if (inputPassword.length() > 0) {
+          // Confirm password and attempt connection
+          password = inputPassword;
+          lcd.noCursor();
+          
+          Serial.println("Password confirmed, attempting connection");
+          Serial.print("SSID: ");
+          Serial.println(ssid);
+          Serial.print("Password: ");
+          Serial.println(password);
+
+          // Attempt connection
+          if (connectToWiFi()) {
+            // Success - save settings and exit
+            saveSettings();
+            wifiConfigMode = false;
+            Serial.println("WiFi configured successfully");
+          } else {
+            // Failed - go back to SSID configuration but keep entered values
+            configuringSSID = true;
+            charIndex = 0;
+            updateSelectedCharForPosition();  // Set character based on SSID content
+            Serial.println("WiFi connection failed - returning to SSID configuration with preserved values");
+          }
+        }
+      }
+      updateWiFiConfigDisplay();
+    }
+    
+    // Handle short button press for character selection
+    if (checkButtonPress()) {
+      if (configuringSSID) {
+        if (selectedChar == charsetSize - 1) {
+          // Backspace functionality for SSID
+          if (charIndex < inputSSID.length()) {
+            // Remove character at current position and move cursor back
+            inputSSID = inputSSID.substring(0, charIndex) + inputSSID.substring(charIndex + 1);
+            if (charIndex > 0) charIndex--;
+            updateSelectedCharForPosition();
+            Serial.println("Backspace: removed character from SSID at position");
+          } else if (charIndex > 0) {
+            // At end of string, just move cursor back
+            charIndex--;
+            updateSelectedCharForPosition();
+          }
+        } else {
+          // Set character at current position
+          if (charIndex < inputSSID.length()) {
+            // Replace existing character
+            inputSSID.setCharAt(charIndex, charset[selectedChar]);
+          } else {
+            // Extend string with spaces if needed, then set character
+            while (inputSSID.length() < charIndex) {
+              inputSSID += " ";
+            }
+            inputSSID += charset[selectedChar];
+          }
+          // Move to next position
+          charIndex++;
+          updateSelectedCharForPosition();
+        }
+      } else {
+        if (selectedChar == charsetSize - 1) {
+          // Backspace functionality for password
+          if (charIndex < inputPassword.length()) {
+            // Remove character at current position and move cursor back
+            inputPassword = inputPassword.substring(0, charIndex) + inputPassword.substring(charIndex + 1);
+            if (charIndex > 0) charIndex--;
+            updateSelectedCharForPosition();
+            Serial.println("Backspace: removed character from password at position");
+          } else if (charIndex > 0) {
+            // At end of string, just move cursor back
+            charIndex--;
+            updateSelectedCharForPosition();
+          }
+        } else {
+          // Set character at current position
+          if (charIndex < inputPassword.length()) {
+            // Replace existing character
+            inputPassword.setCharAt(charIndex, charset[selectedChar]);
+          } else {
+            // Extend string with spaces if needed, then set character
+            while (inputPassword.length() < charIndex) {
+              inputPassword += " ";
+            }
+            inputPassword += charset[selectedChar];
+          }
+          // Move to next position
+          charIndex++;
+          updateSelectedCharForPosition();
+        }
+      }
+      updateWiFiConfigDisplay();
+    }
+    
+    delay(50);  // Small delay for responsiveness
+  }
+  
+  lcd.noCursor();
+}
+
 void updateLCD() {
+  // Handle WiFi configuration display separately - always update immediately
+  if (wifiConfigMode) {
+    forceImmediateLcdUpdate = false;  // Reset the flag for WiFi config mode too
+    updateWiFiConfigDisplay();
+    return;
+  }
+  
   // Check if we need immediate update or if it's time for regular update
   if (!forceImmediateLcdUpdate && (millis() - lastLcdUpdate < LCD_UPDATE_INTERVAL)) return;
   
@@ -281,6 +698,41 @@ void updateLCD() {
         lcd.setCursor(0, 1);
         lcd.print("Mode: ");
         lcd.print(backlightAlwaysOn ? "ALWAYS ON" : "AUTO OFF");
+        break;
+      }
+      case MENU_WIFI: {
+        if (showingConfirmation) {
+          lcd.setCursor(0, 0);
+          lcd.print("Reset WiFi?");
+          lcd.setCursor(0, 1);
+          lcd.print(confirmationChoice ? "> YES    NO" : "  YES  > NO");
+        } else {
+          lcd.setCursor(0, 0);
+          lcd.print("MENU: WiFi");
+          lcd.setCursor(0, 1);
+          switch (currentWiFiMenu) {
+            case WIFI_MENU_SSID: {
+              lcd.print("SSID: ");
+              String displaySSID = ssid;
+              if (displaySSID.length() > 10) {
+                displaySSID = displaySSID.substring(0, 10);
+              }
+              lcd.print(displaySSID);
+              break;
+            }
+            case WIFI_MENU_PASSWORD: {
+              lcd.print("PASS: ");
+              if (password.length() > 0) {
+                lcd.print("*****");
+              }
+              break;
+            }
+            case WIFI_MENU_RESET: {
+              lcd.print("Reset WiFi");
+              break;
+            }
+          }
+        }
         break;
       }
     }
@@ -343,7 +795,13 @@ void IRAM_ATTR handleEncoder() {
     
     // Only change value after enough pulses
     if (encoderCounter >= PULSES_PER_STEP) {
-      if (!inMenu) {
+      if (wifiConfigMode) {
+        // In WiFi config mode: navigate character selection
+        selectedChar++;
+        if (selectedChar >= charsetSize) selectedChar = 0;
+        // Don't force LCD update in interrupt - set flag instead
+        forceImmediateLcdUpdate = true;
+      } else if (!inMenu) {
         // Default mode: control volume (don't update backlight activity)
         volume++;
         if (volume > 80) volume = 80;
@@ -352,7 +810,17 @@ void IRAM_ATTR handleEncoder() {
         forceImmediateLcdUpdate = true;  // Force immediate LCD update
       } else {
         // In menu mode: control menu selection
-        if (currentMenu == MENU_STREAMS) {
+        if (currentMenu == MENU_WIFI) {
+          if (showingConfirmation) {
+            // In confirmation dialog: toggle Yes/No
+            confirmationChoice = !confirmationChoice;
+            forceImmediateLcdUpdate = true;
+          } else {
+            // In WiFi menu: cycle through WiFi items
+            currentWiFiMenu = (WiFiMenuState)((currentWiFiMenu + 1) % WIFI_MENU_COUNT);
+            forceImmediateLcdUpdate = true;
+          }
+        } else if (currentMenu == MENU_STREAMS) {
           currentStream++;
           if (currentStream >= streamCount) currentStream = 0;
           forceImmediateLcdUpdate = true;  // Force immediate LCD update
@@ -372,7 +840,13 @@ void IRAM_ATTR handleEncoder() {
       encoderCounter = 0;  // Reset counter
       lastMenuActivity = currentTime;  // Update menu activity
     } else if (encoderCounter <= -PULSES_PER_STEP) {
-      if (!inMenu) {
+      if (wifiConfigMode) {
+        // In WiFi config mode: navigate character selection
+        selectedChar--;
+        if (selectedChar < 0) selectedChar = charsetSize - 1;
+        // Don't force LCD update in interrupt - set flag instead
+        forceImmediateLcdUpdate = true;
+      } else if (!inMenu) {
         // Default mode: control volume (don't update backlight activity)
         volume--;
         if (volume < 0) volume = 0;
@@ -381,7 +855,17 @@ void IRAM_ATTR handleEncoder() {
         forceImmediateLcdUpdate = true;  // Force immediate LCD update
       } else {
         // In menu mode: control menu selection
-        if (currentMenu == MENU_STREAMS) {
+        if (currentMenu == MENU_WIFI) {
+          if (showingConfirmation) {
+            // In confirmation dialog: toggle Yes/No
+            confirmationChoice = !confirmationChoice;
+            forceImmediateLcdUpdate = true;
+          } else {
+            // In WiFi menu: cycle through WiFi items
+            currentWiFiMenu = (WiFiMenuState)((currentWiFiMenu - 1 + WIFI_MENU_COUNT) % WIFI_MENU_COUNT);
+            forceImmediateLcdUpdate = true;
+          }
+        } else if (currentMenu == MENU_STREAMS) {
           currentStream--;
           if (currentStream < 0) currentStream = streamCount - 1;
           forceImmediateLcdUpdate = true;  // Force immediate LCD update
@@ -407,24 +891,6 @@ void IRAM_ATTR handleEncoder() {
   encoderA_last = encoderA_current;
 }
 
-// Function to check button state (polling instead of interrupt)
-bool checkButtonPress() {
-  bool currentButtonState = digitalRead(ENCODER_BTN);
-  
-  // Check for state change
-  if (currentButtonState != lastButtonState) {
-    lastButtonState = currentButtonState;
-    
-    // Trigger on press (HIGH to LOW)
-    if (currentButtonState == LOW) {
-      Serial.println("Button pressed!");
-      return true;
-    }
-  }
-  
-  return false;
-}
-
 // Menu functions
 void enterMenu() {
   inMenu = true;
@@ -435,6 +901,7 @@ void enterMenu() {
 
 void exitMenu() {
   inMenu = false;
+  showingConfirmation = false;  // Clear any confirmation dialogs
   Serial.println("Exiting menu - Volume control active");
   forceImmediateLcdUpdate = true;  // Force immediate LCD update when exiting menu
 }
@@ -462,6 +929,13 @@ void printCurrentMenu() {
       Serial.print(backlightAlwaysOn ? "ALWAYS ON" : "AUTO OFF");
       Serial.println("");
       break;
+    case MENU_WIFI:
+      Serial.println("MENU: WiFi");
+      Serial.print("SSID: ");
+      Serial.println(ssid.length() > 0 ? ssid : "Not configured");
+      Serial.print("Password: ");
+      Serial.println(password.length() > 0 ? "[Configured]" : "Not configured");
+      break;
   }
 }
 
@@ -480,6 +954,89 @@ void selectStream() {
   currentStreamName = streams[currentStream].name;  // Update current stream name
   saveSettings(); // Save stream selection
 }
+
+// WiFi menu functions
+void enterWiFiMenu() {
+  inWiFiMenu = true;
+  currentWiFiMenu = WIFI_MENU_SSID;
+  showingConfirmation = false;
+  confirmationChoice = false;
+  forceImmediateLcdUpdate = true;
+  Serial.println("Entered WiFi submenu");
+}
+
+void exitWiFiMenu() {
+  inWiFiMenu = false;
+  showingConfirmation = false;
+  forceImmediateLcdUpdate = true;
+  Serial.println("Exited WiFi submenu");
+}
+
+void nextWiFiMenuItem() {
+  if (showingConfirmation) {
+    confirmationChoice = !confirmationChoice; // Toggle Yes/No
+  } else {
+    currentWiFiMenu = (WiFiMenuState)((currentWiFiMenu + 1) % WIFI_MENU_COUNT);
+  }
+  forceImmediateLcdUpdate = true;
+  Serial.print("WiFi Menu Item: ");
+  if (showingConfirmation) {
+    Serial.println(confirmationChoice ? "YES" : "NO");
+  } else {
+    switch (currentWiFiMenu) {
+      case WIFI_MENU_SSID: Serial.println("SSID"); break;
+      case WIFI_MENU_PASSWORD: Serial.println("PASSWORD"); break;
+      case WIFI_MENU_RESET: Serial.println("RESET"); break;
+    }
+  }
+}
+
+void handleWiFiMenuSelection() {
+  if (showingConfirmation) {
+    if (confirmationChoice) {
+      // User selected YES - reset WiFi
+      resetWiFiSettings();
+    } else {
+      // User selected NO - return to WiFi menu
+      showingConfirmation = false;
+      forceImmediateLcdUpdate = true;
+    }
+  } else {
+    switch (currentWiFiMenu) {
+      case WIFI_MENU_SSID:
+      case WIFI_MENU_PASSWORD:
+        // Informative items - move to next WiFi menu item
+        nextWiFiMenuItem();
+        break;
+      case WIFI_MENU_RESET:
+        // Show confirmation dialog
+        showingConfirmation = true;
+        confirmationChoice = false; // Default to NO
+        forceImmediateLcdUpdate = true;
+        Serial.println("Showing WiFi reset confirmation");
+        break;
+    }
+  }
+}
+
+void resetWiFiSettings() {
+  // Clear WiFi credentials in EEPROM
+  ssid = "";
+  password = "";
+  saveSettings();
+  
+  // Show reset message
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("WiFi Reset");
+  lcd.setCursor(0, 1);
+  lcd.print("Rebooting...");
+  delay(2000);
+  
+  Serial.println("WiFi settings reset - rebooting");
+  ESP.restart();
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("ESP32-S3 Internet Radio Starting...");
@@ -519,6 +1076,14 @@ void setup() {
   
   // Initialize backlight activity timer
   lastActivity = millis();
+  
+  // Check if WiFi credentials are configured
+  if (ssid.length() == 0) {
+    Serial.println("No WiFi credentials found. Starting configuration...");
+    // Create custom character for backspace before WiFi config
+    lcd.createChar(0, backspaceSymbol);
+    configureWiFi();
+  }
   
   WiFi.disconnect();
   WiFi.mode(WIFI_STA);
@@ -569,7 +1134,35 @@ void loop()
       enterMenu();
     } else {
       // Navigate to next menu item or execute action
-      if (currentMenu == MENU_STREAMS) {
+      if (currentMenu == MENU_WIFI) {
+        if (showingConfirmation) {
+          // Handle confirmation dialog
+          if (confirmationChoice) {
+            // User selected YES - reset WiFi
+            resetWiFiSettings();
+          } else {
+            // User selected NO - return to WiFi menu
+            showingConfirmation = false;
+            forceImmediateLcdUpdate = true;
+          }
+        } else {
+          // Handle WiFi menu items
+          switch (currentWiFiMenu) {
+            case WIFI_MENU_SSID:
+            case WIFI_MENU_PASSWORD:
+              // Informative items - move to next main menu
+              nextMenuItem();
+              break;
+            case WIFI_MENU_RESET:
+              // Show confirmation dialog
+              showingConfirmation = true;
+              confirmationChoice = false; // Default to NO
+              forceImmediateLcdUpdate = true;
+              Serial.println("Showing WiFi reset confirmation");
+              break;
+          }
+        }
+      } else if (currentMenu == MENU_STREAMS) {
         // In streams menu, button press behavior depends on selection
         if (currentStream == playingStream) {
           // If selected stream is the current playing stream, go to next menu
@@ -580,7 +1173,7 @@ void loop()
           exitMenu();  // Return to volume control after selection
         }
       } else {
-        // Move to next menu item
+        // Move to next menu item for other menus
         nextMenuItem();
       }
     }
