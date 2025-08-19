@@ -29,12 +29,49 @@ volatile int encoderCounter = 0;  // Counter for encoder pulses
 const int PULSES_PER_STEP = 4;    // Require 4 pulses for 1 volume change
 bool radioOn = true;  // Radio state
 
+// Menu system variables
+enum MenuState {
+  MENU_VOLUME = 0,
+  MENU_STREAMS = 1,
+  MENU_COUNT = 2
+};
+
+MenuState currentMenu = MENU_VOLUME;
+bool inMenu = false;
+unsigned long lastMenuActivity = 0;
+const unsigned long MENU_TIMEOUT = 5000;  // 5 seconds timeout
+
+// Stream definitions
+struct RadioStream {
+  const char* name;
+  const char* url;
+};
+
+RadioStream streams[] = {
+  {"Jacaranda FM", "https://edge.iono.fm/xice/jacarandafm_live_medium.aac"},
+  {"Pretoria FM", "https://edge.iono.fm/xice/362_medium.aac"},
+  {"Lekker FM", "https://zas3.ndx.co.za:8002/stream"},
+  {"Groot FM", "https://edge.iono.fm/xice/330_medium.aac"},
+  {"RSG", "https://28553.live.streamtheworld.com/RSGAAC.aac"}
+};
+
+int currentStream = 0;
+int playingStream = 0;  // Track which stream is actually playing
+const int streamCount = sizeof(streams) / sizeof(streams[0]);
+
 // Button handling variables (non-volatile for better control)
 bool buttonState = HIGH;
 bool lastButtonState = HIGH;
 unsigned long lastButtonChange = 0;
 const unsigned long BUTTON_DEBOUNCE = 50;    // 50ms debounce
 const unsigned long BUTTON_HOLD_TIME = 100;  // Minimum hold time
+
+// Forward declarations
+void printCurrentMenu();
+void enterMenu();
+void exitMenu();
+void nextMenuItem();
+void selectStream();
 
 // Encoder interrupt functions
 void IRAM_ATTR handleEncoder() {
@@ -49,15 +86,43 @@ void IRAM_ATTR handleEncoder() {
       encoderCounter--;  // Counter-clockwise
     }
     
-    // Only change volume after enough pulses
+    // Only change value after enough pulses
     if (encoderCounter >= PULSES_PER_STEP) {
-      volume++;
-      if (volume > 80) volume = 80;  // Max volume 80
+      if (!inMenu) {
+        // Default mode: control volume
+        volume++;
+        if (volume > 80) volume = 80;
+      } else {
+        // In menu mode: control menu selection
+        if (currentMenu == MENU_STREAMS) {
+          currentStream++;
+          if (currentStream >= streamCount) currentStream = 0;
+        } else if (currentMenu == MENU_VOLUME) {
+          // In volume menu: control volume
+          volume++;
+          if (volume > 80) volume = 80;
+        }
+      }
       encoderCounter = 0;  // Reset counter
+      lastMenuActivity = currentTime;  // Update menu activity
     } else if (encoderCounter <= -PULSES_PER_STEP) {
-      volume--;
-      if (volume < 0) volume = 0;   // Min volume 0
+      if (!inMenu) {
+        // Default mode: control volume
+        volume--;
+        if (volume < 0) volume = 0;
+      } else {
+        // In menu mode: control menu selection
+        if (currentMenu == MENU_STREAMS) {
+          currentStream--;
+          if (currentStream < 0) currentStream = streamCount - 1;
+        } else if (currentMenu == MENU_VOLUME) {
+          // In volume menu: control volume
+          volume--;
+          if (volume < 0) volume = 0;
+        }
+      }
       encoderCounter = 0;  // Reset counter
+      lastMenuActivity = currentTime;  // Update menu activity
     }
     
     lastEncoderTime = currentTime;
@@ -81,6 +146,50 @@ bool checkButtonPress() {
   }
   
   return false;
+}
+
+// Menu functions
+void enterMenu() {
+  inMenu = true;
+  lastMenuActivity = millis();
+  printCurrentMenu();
+}
+
+void exitMenu() {
+  inMenu = false;
+  Serial.println("Exiting menu - Volume control active");
+}
+
+void printCurrentMenu() {
+  switch (currentMenu) {
+    case MENU_VOLUME:
+      Serial.println("MENU: Volume");
+      Serial.print("Current Volume: ");
+      Serial.println(volume);
+      break;
+    case MENU_STREAMS:
+      Serial.println("MENU: Streams");
+      Serial.print("Current Stream: ");
+      Serial.print(streams[currentStream].name);
+      if (currentStream == playingStream) {
+        Serial.println(" (PLAYING)");
+      } else {
+        Serial.println("");
+      }
+      break;
+  }
+}
+
+void nextMenuItem() {
+  currentMenu = (MenuState)((currentMenu + 1) % MENU_COUNT);
+  printCurrentMenu();
+}
+
+void selectStream() {
+  Serial.print("Connecting to: ");
+  Serial.println(streams[currentStream].name);
+  audio.connecttohost(streams[currentStream].url);
+  playingStream = currentStream;  // Update the playing stream index
 }
 void setup() {
   Serial.begin(115200);
@@ -131,38 +240,68 @@ void setup() {
   Serial.println(volume);
   // Radio stream, e.g. Byte.fm
   //audio.connecttohost("https://edge.iono.fm/xice/362_medium.aac");
-  audio.connecttohost("https://edge.iono.fm/xice/jacarandafm_live_medium.aac");
+  audio.connecttohost(streams[currentStream].url);  // Use default stream
+  playingStream = currentStream;  // Initialize playing stream
+  Serial.print("Connected to: ");
+  Serial.println(streams[currentStream].name);
 }
 void loop()
 {
   static int lastVolume = volume;
+  static int lastStream = currentStream;
   
-  // Handle button press (power on/off) - using polling instead of interrupt
+  // Check for menu timeout
+  if (inMenu && (millis() - lastMenuActivity > MENU_TIMEOUT)) {
+    exitMenu();
+  }
+  
+  // Handle button press (menu navigation)
   if (checkButtonPress()) {
-    Serial.println("Button Press detected");
-    radioOn = !radioOn;
+    lastMenuActivity = millis();
     
-    if (radioOn) {
-      Serial.println("Radio ON");
-      audio.setVolume(volume);
+    if (!inMenu) {
+      // Enter menu mode
+      enterMenu();
     } else {
-      Serial.println("Radio OFF");
-      audio.setVolume(0);
+      // Navigate to next menu item or execute action
+      if (currentMenu == MENU_STREAMS) {
+        // In streams menu, button press behavior depends on selection
+        if (currentStream == playingStream) {
+          // If selected stream is the current playing stream, go to next menu
+          nextMenuItem();
+        } else {
+          // If different stream selected, connect to it and exit menu
+          selectStream();
+          exitMenu();  // Return to volume control after selection
+        }
+      } else {
+        // Move to next menu item
+        nextMenuItem();
+      }
     }
   }
   
-  // Handle volume change (only when radio is on)
-  if (volume != lastVolume && radioOn) {
+  // Handle volume change (only when not in menu or in volume menu)
+  if (volume != lastVolume && (!inMenu || currentMenu == MENU_VOLUME)) {
     audio.setVolume(volume);
     Serial.print("Volume: ");
     Serial.println(volume);
     lastVolume = volume;
+    
+    if (inMenu && currentMenu == MENU_VOLUME) {
+      lastMenuActivity = millis();  // Reset timeout when adjusting volume in menu
+    }
   }
   
-  // Only process audio when radio is on
-  if (radioOn) {
-    audio.loop();
+  // Handle stream change (when in streams menu)
+  if (currentStream != lastStream && inMenu && currentMenu == MENU_STREAMS) {
+    Serial.print("Selected Stream: ");
+    Serial.println(streams[currentStream].name);
+    lastStream = currentStream;
   }
+  
+  // Process audio
+  audio.loop();
 }
 // Print station info
 void audio_info(const char *info) {
