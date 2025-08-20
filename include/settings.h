@@ -12,11 +12,13 @@ struct Settings {
   bool radioPowerOn;
   char wifiSSID[32];
   char wifiPassword[64];
+  char weatherApiKey[64];
 };
 
 // Global settings variables
 extern String ssid;
 extern String password;
+extern String weatherApiKey;
 extern volatile int volume;
 extern int currentStream;
 extern bool backlightAlwaysOn;

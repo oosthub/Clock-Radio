@@ -13,6 +13,8 @@ extern bool forceImmediateLcdUpdate;
 extern bool showVolumeDisplay;
 extern unsigned long lastVolumeChange;
 extern unsigned long lastActivity;
+extern bool displayJustWokenUp;
+extern unsigned long displayWakeTime;
 
 // Custom characters
 extern byte backspaceSymbol[8];

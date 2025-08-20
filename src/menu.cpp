@@ -4,34 +4,137 @@
 #include "display.h"
 #include "Audio.h"
 #include "WiFi.h"
+#include "ArduinoJson.h"
+#include "SPIFFS.h"
+#include "weather.h"
 
 // Menu variables
-MenuState currentMenu = MENU_VOLUME;
+MenuState currentMenu = MENU_SLEEP;
 bool inMenu = false;
 unsigned long lastMenuActivity = 0;
+SleepMenuState currentSleepMenu = SLEEP_MENU_BLANK;
 WiFiMenuState currentWiFiMenu = WIFI_MENU_IP;
+WeatherMenuState currentWeatherMenu = WEATHER_MENU_TEMPERATURE;
 bool showingConfirmation = false;
 bool confirmationChoice = false;
 bool brightnessChanged = false;
 int playingStream = 0;
 
-// Stream definitions
-RadioStream streams[] = {
-  {"Jacaranda FM", "https://edge.iono.fm/xice/jacarandafm_live_medium.aac"},
-  {"Pretoria FM", "https://edge.iono.fm/xice/362_medium.aac"},
-  {"Lekker FM", "https://zas3.ndx.co.za:8002/stream"},
-  {"Groot FM", "https://edge.iono.fm/xice/330_medium.aac"},
-  {"RSG", "https://28553.live.streamtheworld.com/RSGAAC.aac"}
-};
+// Sleep timer variables
+unsigned long sleepTimerStart = 0;
+unsigned long sleepTimerDuration = 0;
+bool sleepTimerActive = false;
 
-const int streamCount = sizeof(streams) / sizeof(streams[0]);
+// Dynamic stream storage for menu system
+RadioStream menuStreams[MAX_MENU_STREAMS];
+int menuStreamCount = 0;
 
 // External audio object (defined in main.cpp)
 extern Audio audio;
 
+void createDefaultStreamsFile() {
+  DynamicJsonDocument doc(2048);
+  JsonArray array = doc.to<JsonArray>();
+  
+  // Default stream data
+  const char* defaultStreams[][2] = {
+    {"Jacaranda FM", "https://edge.iono.fm/xice/jacarandafm_live_medium.aac"},
+    {"Pretoria FM", "https://edge.iono.fm/xice/362_medium.aac"},
+    {"Lekker FM", "https://zas3.ndx.co.za:8002/stream"},
+    {"Groot FM", "https://edge.iono.fm/xice/330_medium.aac"},
+    {"RSG", "https://28553.live.streamtheworld.com/RSGAAC.aac"}
+  };
+  
+  // Add default streams using loop
+  for (int i = 0; i < 5; i++) {
+    JsonObject stream = array.createNestedObject();
+    stream["name"] = defaultStreams[i][0];
+    stream["url"] = defaultStreams[i][1];
+  }
+  
+  // Save to file
+  File file = SPIFFS.open("/streams.json", "w");
+  if (file) {
+    serializeJson(doc, file);
+    file.close();
+    Serial.println("Default streams file created successfully");
+  } else {
+    Serial.println("Failed to create default streams file");
+  }
+}
+
+void loadDefaultStreamsToMemory() {
+  // Fallback: load default streams directly to memory
+  menuStreamCount = 5;
+  strcpy(menuStreams[0].name, "Jacaranda FM");
+  strcpy(menuStreams[0].url, "https://edge.iono.fm/xice/jacarandafm_live_medium.aac");
+  strcpy(menuStreams[1].name, "Pretoria FM");
+  strcpy(menuStreams[1].url, "https://edge.iono.fm/xice/362_medium.aac");
+  strcpy(menuStreams[2].name, "Lekker FM");
+  strcpy(menuStreams[2].url, "https://zas3.ndx.co.za:8002/stream");
+  strcpy(menuStreams[3].name, "Groot FM");
+  strcpy(menuStreams[3].url, "https://edge.iono.fm/xice/330_medium.aac");
+  strcpy(menuStreams[4].name, "RSG");
+  strcpy(menuStreams[4].url, "https://28553.live.streamtheworld.com/RSGAAC.aac");
+  Serial.println("Default streams loaded to memory as fallback");
+}
+
+void loadMenuStreamsFromFile() {
+  File file = SPIFFS.open("/streams.json", "r");
+  if (!file) {
+    Serial.println("No streams.json file found, creating default streams file");
+    createDefaultStreamsFile();
+    // Now try to load the file we just created
+    file = SPIFFS.open("/streams.json", "r");
+    if (!file) {
+      Serial.println("Failed to create default streams file, using memory fallback");
+      loadDefaultStreamsToMemory();
+      return;
+    }
+  }
+  
+  DynamicJsonDocument doc(2048);
+  DeserializationError error = deserializeJson(doc, file);
+  file.close();
+  
+  if (error) {
+    Serial.println("Failed to parse streams.json for menu, using memory fallback");
+    loadDefaultStreamsToMemory();
+    return;
+  }
+  
+  menuStreamCount = 0;
+  JsonArray array = doc.as<JsonArray>();
+  for (JsonObject stream : array) {
+    if (menuStreamCount >= MAX_MENU_STREAMS) break;
+    
+    const char* name = stream["name"];
+    const char* url = stream["url"];
+    
+    if (name && url) {
+      strncpy(menuStreams[menuStreamCount].name, name, 16);
+      menuStreams[menuStreamCount].name[16] = '\0'; // Ensure null termination
+      strncpy(menuStreams[menuStreamCount].url, url, 255);
+      menuStreams[menuStreamCount].url[255] = '\0'; // Ensure null termination
+      menuStreamCount++;
+    }
+  }
+  
+  Serial.print("Loaded ");
+  Serial.print(menuStreamCount);
+  Serial.println(" streams for menu from JSON file");
+}
+
 void enterMenu() {
   inMenu = true;
   lastMenuActivity = millis();
+  displayJustWokenUp = false; // Reset wake-up state when entering menu
+  
+  // Reset sleep menu to blank option when entering menu system
+  if (currentMenu == MENU_SLEEP) {
+    currentSleepMenu = SLEEP_MENU_BLANK;
+  }
+  
   printCurrentMenu();
   forceImmediateLcdUpdate = true;
 }
@@ -39,31 +142,40 @@ void enterMenu() {
 void exitMenu() {
   inMenu = false;
   showingConfirmation = false;
+  displayJustWokenUp = false; // Reset wake-up state when exiting menu
   Serial.println("Exiting menu - Volume control active");
   forceImmediateLcdUpdate = true;
 }
 
 void nextMenuItem() {
   currentMenu = (MenuState)((currentMenu + 1) % MENU_COUNT);
+  
+  // Reset sleep menu to blank option when entering sleep menu
+  if (currentMenu == MENU_SLEEP) {
+    currentSleepMenu = SLEEP_MENU_BLANK;
+  }
+  
   printCurrentMenu();
   forceImmediateLcdUpdate = true;
 }
 
 void printCurrentMenu() {
   switch (currentMenu) {
-    case MENU_VOLUME:
-      Serial.println("MENU: Volume");
-      Serial.print("Current Volume: ");
-      Serial.println(volume);
+    case MENU_SLEEP:
+      Serial.println("MENU: Sleep");
       break;
     case MENU_STREAMS:
       Serial.println("MENU: Streams");
       Serial.print("Current Stream: ");
-      Serial.print(streams[currentStream].name);
-      if (currentStream == playingStream) {
-        Serial.println(" (PLAYING)");
+      if (menuStreamCount > 0) {
+        Serial.print(menuStreams[currentStream].name);
+        if (currentStream == playingStream) {
+          Serial.println(" (PLAYING)");
+        } else {
+          Serial.println("");
+        }
       } else {
-        Serial.println("");
+        Serial.println("No streams available");
       }
       break;
     case MENU_BRIGHTNESS:
@@ -79,28 +191,68 @@ void printCurrentMenu() {
       Serial.print("Password: ");
       Serial.println(password.length() > 0 ? "[Configured]" : "Not configured");
       break;
+    case MENU_WEATHER:
+      Serial.println("MENU: Weather");
+      Serial.print("Location: ");
+      Serial.println(weatherLocation.length() > 0 ? weatherLocation : "Unknown");
+      Serial.print("Temperature: ");
+      Serial.print(currentWeather.temperature);
+      Serial.println("°C");
+      Serial.print("Description: ");
+      Serial.println(currentWeather.description);
+      Serial.print("Humidity: ");
+      Serial.print(currentWeather.humidity);
+      Serial.println("%");
+      Serial.print("API Key: ");
+      Serial.println(weatherApiKey.length() > 0 ? "[Configured]" : "Not configured");
+      break;
   }
 }
 
 void displayCurrentMenu() {
   switch (currentMenu) {
-    case MENU_VOLUME: {
+    case MENU_SLEEP: {
       lcd.setCursor(0, 0);
-      lcd.print("MENU: Volume");
+      lcd.print("MENU: Sleep");
       lcd.setCursor(0, 1);
-      lcd.print("Level: ");
-      lcd.print(volume);
+      switch (currentSleepMenu) {
+        case SLEEP_MENU_BLANK:
+          lcd.print("                "); // Print blank line (16 spaces)
+          break;
+        case SLEEP_MENU_OFF:
+          lcd.print("OFF");
+          break;
+        case SLEEP_MENU_15MIN:
+          lcd.print("15 minutes");
+          break;
+        case SLEEP_MENU_30MIN:
+          lcd.print("30 minutes");
+          break;
+        case SLEEP_MENU_60MIN:
+          lcd.print("60 minutes");
+          break;
+        case SLEEP_MENU_90MIN:
+          lcd.print("90 minutes");
+          break;
+        case SLEEP_MENU_5MIN:
+          lcd.print("5 minutes");
+          break;
+      }
       break;
     }
     case MENU_STREAMS: {
       lcd.setCursor(0, 0);
       lcd.print("MENU: Station");
       lcd.setCursor(0, 1);
-      String streamName = streams[currentStream].name;
-      if (streamName.length() > 16) {
-        streamName = streamName.substring(0, 16);
+      if (menuStreamCount > 0) {
+        String streamName = menuStreams[currentStream].name;
+        if (streamName.length() > 16) {
+          streamName = streamName.substring(0, 16);
+        }
+        lcd.print(streamName);
+      } else {
+        lcd.print("No streams");
       }
-      lcd.print(streamName);
       break;
     }
     case MENU_BRIGHTNESS: {
@@ -159,19 +311,28 @@ void displayCurrentMenu() {
       }
       break;
     }
+    case MENU_WEATHER: {
+      // Weather menu display is now handled in display.cpp
+      break;
+    }
   }
 }
 
 void selectStream() {
+  if (menuStreamCount == 0) {
+    Serial.println("No streams available to select");
+    return;
+  }
+  
   Serial.print("Connecting to: ");
-  Serial.println(streams[currentStream].name);
+  Serial.println(menuStreams[currentStream].name);
   
   // Only actually connect if radio is powered on
   if (radioPowerOn) {
-    audio.connecttohost(streams[currentStream].url);
+    audio.connecttohost(menuStreams[currentStream].url);
     playingStream = currentStream;
     isStreaming = true;
-    currentStreamName = streams[currentStream].name;
+    currentStreamName = menuStreams[currentStream].name;
   } else {
     Serial.println("Radio is OFF - stream selection saved but not playing");
     isStreaming = false;
@@ -207,13 +368,15 @@ void handleMenuEncoderClockwise(unsigned long currentTime) {
       currentWiFiMenu = (WiFiMenuState)((currentWiFiMenu + 1) % WIFI_MENU_COUNT);
       forceImmediateLcdUpdate = true;
     }
+  } else if (currentMenu == MENU_WEATHER) {
+    currentWeatherMenu = (WeatherMenuState)((currentWeatherMenu + 1) % WEATHER_MENU_COUNT);
+    forceImmediateLcdUpdate = true;
   } else if (currentMenu == MENU_STREAMS) {
     currentStream++;
-    if (currentStream >= streamCount) currentStream = 0;
+    if (currentStream >= menuStreamCount) currentStream = 0;
     forceImmediateLcdUpdate = true;
-  } else if (currentMenu == MENU_VOLUME) {
-    volume++;
-    if (volume > 80) volume = 80;
+  } else if (currentMenu == MENU_SLEEP) {
+    currentSleepMenu = (SleepMenuState)((currentSleepMenu + 1) % SLEEP_MENU_COUNT);
     forceImmediateLcdUpdate = true;
   } else if (currentMenu == MENU_BRIGHTNESS) {
     backlightAlwaysOn = !backlightAlwaysOn;
@@ -232,13 +395,15 @@ void handleMenuEncoderCounterClockwise(unsigned long currentTime) {
       currentWiFiMenu = (WiFiMenuState)((currentWiFiMenu - 1 + WIFI_MENU_COUNT) % WIFI_MENU_COUNT);
       forceImmediateLcdUpdate = true;
     }
+  } else if (currentMenu == MENU_WEATHER) {
+    currentWeatherMenu = (WeatherMenuState)((currentWeatherMenu - 1 + WEATHER_MENU_COUNT) % WEATHER_MENU_COUNT);
+    forceImmediateLcdUpdate = true;
   } else if (currentMenu == MENU_STREAMS) {
     currentStream--;
-    if (currentStream < 0) currentStream = streamCount - 1;
+    if (currentStream < 0) currentStream = menuStreamCount - 1;
     forceImmediateLcdUpdate = true;
-  } else if (currentMenu == MENU_VOLUME) {
-    volume--;
-    if (volume < 0) volume = 0;
+  } else if (currentMenu == MENU_SLEEP) {
+    currentSleepMenu = (SleepMenuState)((currentSleepMenu - 1 + SLEEP_MENU_COUNT) % SLEEP_MENU_COUNT);
     forceImmediateLcdUpdate = true;
   } else if (currentMenu == MENU_BRIGHTNESS) {
     backlightAlwaysOn = !backlightAlwaysOn;
@@ -272,6 +437,10 @@ void handleMenuButtonPress() {
           break;
       }
     }
+  } else if (currentMenu == MENU_WEATHER) {
+    handleWeatherMenuButtonPress();
+  } else if (currentMenu == MENU_SLEEP) {
+    handleSleepMenuButtonPress();
   } else if (currentMenu == MENU_STREAMS) {
     if (currentStream == playingStream) {
       nextMenuItem();
@@ -281,5 +450,80 @@ void handleMenuButtonPress() {
     }
   } else {
     nextMenuItem();
+  }
+}
+
+void handleWeatherMenuButtonPress() {
+  switch (currentWeatherMenu) {
+    case WEATHER_MENU_TEMPERATURE:
+    case WEATHER_MENU_HUMIDITY:
+    case WEATHER_MENU_DESCRIPTION:
+    case WEATHER_MENU_API_KEY:
+      // These are informational - just advance to next main menu item (like WiFi menu)
+      nextMenuItem();
+      break;
+    case WEATHER_MENU_UPDATE:
+      // Force a weather update
+      Serial.println("Manual weather update requested");
+      lastWeatherUpdate = 0; // Reset timer to force immediate update
+      forceWeatherUpdate(); // Call weather update function
+      exitMenu(); // Exit menu after triggering update
+      break;
+  }
+}
+
+void handleSleepMenuButtonPress() {
+  switch (currentSleepMenu) {
+    case SLEEP_MENU_BLANK:
+      // Blank option - just move to next menu
+      nextMenuItem();
+      break;
+    case SLEEP_MENU_OFF:
+      // Turn off sleep timer
+      sleepTimerActive = false;
+      Serial.println("Sleep timer turned OFF");
+      exitMenu(); // Exit menu after action
+      break;
+    case SLEEP_MENU_15MIN:
+      setSleepTimer(15);
+      exitMenu(); // Exit menu after action
+      break;
+    case SLEEP_MENU_30MIN:
+      setSleepTimer(30);
+      exitMenu(); // Exit menu after action
+      break;
+    case SLEEP_MENU_60MIN:
+      setSleepTimer(60);
+      exitMenu(); // Exit menu after action
+      break;
+    case SLEEP_MENU_90MIN:
+      setSleepTimer(90);
+      exitMenu(); // Exit menu after action
+      break;
+    case SLEEP_MENU_5MIN:
+      setSleepTimer(5);
+      exitMenu(); // Exit menu after action
+      break;
+  }
+}
+
+void setSleepTimer(int minutes) {
+  sleepTimerStart = millis();
+  sleepTimerDuration = minutes * 60 * 1000; // Convert minutes to milliseconds
+  sleepTimerActive = true;
+  
+  Serial.print("Sleep timer set for ");
+  Serial.print(minutes);
+  Serial.println(" minutes");
+}
+
+void checkSleepTimer() {
+  if (sleepTimerActive && (millis() - sleepTimerStart >= sleepTimerDuration)) {
+    // Timer expired - turn off radio
+    Serial.println("Sleep timer expired - turning off radio");
+    radioPowerOn = false;
+    audio.stopSong();
+    sleepTimerActive = false;
+    forceImmediateLcdUpdate = true;
   }
 }

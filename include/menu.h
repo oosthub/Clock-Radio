@@ -5,11 +5,23 @@
 
 // Menu system enums and variables
 enum MenuState {
-  MENU_VOLUME = 0,
+  MENU_SLEEP = 0,
   MENU_STREAMS = 1,
   MENU_BRIGHTNESS = 2,
   MENU_WIFI = 3,
-  MENU_COUNT = 4
+  MENU_WEATHER = 4,
+  MENU_COUNT = 5
+};
+
+enum SleepMenuState {
+  SLEEP_MENU_BLANK = 0,
+  SLEEP_MENU_OFF = 1,
+  SLEEP_MENU_15MIN = 2,
+  SLEEP_MENU_30MIN = 3,
+  SLEEP_MENU_60MIN = 4,
+  SLEEP_MENU_90MIN = 5,
+  SLEEP_MENU_5MIN = 6,
+  SLEEP_MENU_COUNT = 7
 };
 
 enum WiFiMenuState {
@@ -20,23 +32,42 @@ enum WiFiMenuState {
   WIFI_MENU_COUNT = 4
 };
 
-// Stream structure
-struct RadioStream {
-  const char* name;
-  const char* url;
+enum WeatherMenuState {
+  WEATHER_MENU_TEMPERATURE = 0,
+  WEATHER_MENU_HUMIDITY = 1,
+  WEATHER_MENU_DESCRIPTION = 2,
+  WEATHER_MENU_API_KEY = 3,
+  WEATHER_MENU_UPDATE = 4,
+  WEATHER_MENU_COUNT = 5
 };
+
+// Stream structure - changed to support dynamic allocation
+struct RadioStream {
+  char name[17];   // 16 characters + null terminator (same as WebRadioStream)
+  char url[256];   // URL for the stream (same as WebRadioStream)
+};
+
+// Maximum number of radio streams
+#define MAX_MENU_STREAMS 20
 
 // Global menu variables
 extern MenuState currentMenu;
 extern bool inMenu;
 extern unsigned long lastMenuActivity;
+extern SleepMenuState currentSleepMenu;
 extern WiFiMenuState currentWiFiMenu;
+extern WeatherMenuState currentWeatherMenu;
 extern bool showingConfirmation;
 extern bool confirmationChoice;
 extern bool brightnessChanged;
-extern RadioStream streams[];
-extern const int streamCount;
+extern RadioStream menuStreams[MAX_MENU_STREAMS];
+extern int menuStreamCount;
 extern int playingStream;
+
+// Sleep timer variables
+extern unsigned long sleepTimerStart;
+extern unsigned long sleepTimerDuration;
+extern bool sleepTimerActive;
 
 // Function declarations
 void enterMenu();
@@ -49,5 +80,13 @@ void handleMenuEncoderClockwise(unsigned long currentTime);
 void handleMenuEncoderCounterClockwise(unsigned long currentTime);
 void handleMenuButtonPress();
 void resetWiFiSettings();
+void loadMenuStreamsFromFile();
+void createDefaultStreamsFile();
+void loadDefaultStreamsToMemory();
+void displayWeatherMenu();
+void handleWeatherMenuButtonPress();
+void handleSleepMenuButtonPress();
+void setSleepTimer(int minutes);
+void checkSleepTimer();
 
 #endif

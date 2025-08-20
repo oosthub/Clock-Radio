@@ -3,6 +3,7 @@
 #include "settings.h"
 #include "menu.h"
 #include "wifi_config.h"
+#include "weather.h"
 #include "Wire.h"
 #include "time.h"
 #include "WiFi.h"
@@ -16,6 +17,8 @@ bool forceImmediateLcdUpdate = false;
 bool showVolumeDisplay = false;
 unsigned long lastVolumeChange = 0;
 unsigned long lastActivity = 0;
+bool displayJustWokenUp = false;
+unsigned long displayWakeTime = 0;
 
 // Variables to track what's currently displayed to avoid unnecessary updates
 String lastDisplayedLine0 = "";
@@ -23,7 +26,7 @@ String lastDisplayedLine1 = "";
 bool lastShowVolumeDisplay = false;
 bool lastInMenu = false;
 
-// Custom character for backspace
+// Custom characters for LCD display
 byte backspaceSymbol[8] = {
   0b00000,
   0b00100,
@@ -31,6 +34,40 @@ byte backspaceSymbol[8] = {
   0b11111,
   0b01100,
   0b00100,
+  0b00000,
+  0b00000
+};
+
+// Weather custom characters
+byte degreeSymbol[8] = {
+  0b01110,
+  0b01010,
+  0b01110,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000
+};
+
+byte sunSymbol[8] = {
+  0b00000,
+  0b10101,
+  0b01110,
+  0b11111,
+  0b01110,
+  0b10101,
+  0b00000,
+  0b00000
+};
+
+byte cloudSymbol[8] = {
+  0b00000,
+  0b00000,
+  0b01110,
+  0b11111,
+  0b11111,
+  0b01110,
   0b00000,
   0b00000
 };
@@ -72,13 +109,19 @@ void setupLCD() {
   lcd.backlight();
   lcd.clear();
   
+  // Create custom characters
+  lcd.createChar(0, backspaceSymbol);  // Character 0: backspace
+  lcd.createChar(1, degreeSymbol);     // Character 1: degree symbol
+  lcd.createChar(2, sunSymbol);        // Character 2: sun
+  lcd.createChar(3, cloudSymbol);      // Character 3: cloud
+  
   // Test if LCD is responding
   lcd.setCursor(0, 0);
-  lcd.print("ESP32 Radio");
+  lcd.print("OOSIE Radio");
   lcd.setCursor(0, 1);
   lcd.print("Starting...");
   
-  Serial.println("LCD initialized");
+  Serial.println("LCD initialized with custom characters");
   delay(2000);
 }
 
@@ -165,15 +208,49 @@ void updateLCD() {
   char timeStr[6];
   strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
   
+  // Get weather string for display
+  String weatherStr = "";
+  if (currentWeather.valid) {
+    weatherStr = formatTemperature(currentWeather.temperature) + currentWeather.icon;
+  } else {
+    weatherStr = "?" + String((char)1) + "C"; // ?°C using custom degree symbol
+  }
+  
+  // Time + Weather layout: "12:34  22°C☀" or "12:34 Zz 22°C☀" if sleep timer active
+  String timeWeatherLine = String(timeStr);
+  
+  // Add sleep timer indicator if active
+  String sleepIndicator = "";
+  if (sleepTimerActive) {
+    sleepIndicator = " Zz";
+  }
+  
+  // Calculate spacing to right-align weather on 16-char display
+  int remainingSpace = 16 - timeWeatherLine.length() - sleepIndicator.length() - weatherStr.length();
+  if (remainingSpace > 0) {
+    timeWeatherLine += sleepIndicator;
+    for (int i = 0; i < remainingSpace; i++) {
+      timeWeatherLine += " ";
+    }
+    timeWeatherLine += weatherStr;
+  } else {
+    // If everything doesn't fit, prioritize time and sleep indicator, then truncate weather
+    timeWeatherLine += sleepIndicator;
+    int maxWeatherLen = 16 - timeWeatherLine.length() - 1;
+    if (maxWeatherLen > 0) {
+      timeWeatherLine += " " + weatherStr.substring(0, maxWeatherLen);
+    }
+  }
+  
   if (radioPowerOn && isStreaming) {
-    // Radio is on: Top line: Time only (centered)
-    updateLCDLine(0, String(timeStr), true);
+    // Radio is on: Top line: Time + Weather
+    updateLCDLine(0, timeWeatherLine, false);
     
     // Bottom line: Current stream name (centered)
     updateLCDLine(1, currentStreamName, true);
   } else {
-    // Radio is off or not streaming: Top line: Time only (centered)
-    updateLCDLine(0, String(timeStr), true);
+    // Radio is off or not streaming: Top line: Time + Weather
+    updateLCDLine(0, timeWeatherLine, false);
     // Bottom line: Show radio status
     if (!radioPowerOn) {
       updateLCDLine(1, "Radio OFF", true);
@@ -188,14 +265,36 @@ void displayCurrentMenuOptimized() {
   String line1 = "";
   
   switch (currentMenu) {
-    case MENU_VOLUME: {
-      line0 = "MENU: Volume";
-      line1 = "Level: " + String(volume);
+    case MENU_SLEEP: {
+      line0 = "MENU: Sleep";
+      switch (currentSleepMenu) {
+        case SLEEP_MENU_BLANK:
+          line1 = ""; // Blank line
+          break;
+        case SLEEP_MENU_OFF:
+          line1 = "OFF";
+          break;
+        case SLEEP_MENU_15MIN:
+          line1 = "15 minutes";
+          break;
+        case SLEEP_MENU_30MIN:
+          line1 = "30 minutes";
+          break;
+        case SLEEP_MENU_60MIN:
+          line1 = "60 minutes";
+          break;
+        case SLEEP_MENU_90MIN:
+          line1 = "90 minutes";
+          break;
+        case SLEEP_MENU_5MIN:
+          line1 = "5 minutes";
+          break;
+      }
       break;
     }
     case MENU_STREAMS: {
       line0 = "MENU: Station";
-      String streamName = streams[currentStream].name;
+      String streamName = menuStreams[currentStream].name;
       if (streamName.length() > 16) {
         streamName = streamName.substring(0, 16);
       }
@@ -246,6 +345,56 @@ void displayCurrentMenuOptimized() {
             line1 = "Reset WiFi";
             break;
           }
+        }
+      }
+      break;
+    }
+    case MENU_WEATHER: {
+      line0 = "MENU: Weather";
+      switch (currentWeatherMenu) {
+        case WEATHER_MENU_TEMPERATURE: {
+          line1 = "TEMP: ";
+          if (currentWeather.valid) {
+            line1 += String((int)currentWeather.temperature) + "C";
+          } else {
+            line1 += "--";
+          }
+          break;
+        }
+        case WEATHER_MENU_HUMIDITY: {
+          line1 = "HUM: ";
+          if (currentWeather.valid) {
+            line1 += String(currentWeather.humidity) + "%";
+          } else {
+            line1 += "--";
+          }
+          break;
+        }
+        case WEATHER_MENU_DESCRIPTION: {
+          line1 = "DESC: ";
+          if (currentWeather.valid) {
+            String desc = currentWeather.description;
+            if (desc.length() > 10) {
+              desc = desc.substring(0, 10);
+            }
+            line1 += desc;
+          } else {
+            line1 += "--";
+          }
+          break;
+        }
+        case WEATHER_MENU_API_KEY: {
+          line1 = "API: ";
+          if (weatherApiKey.length() > 0) {
+            line1 += "SET";
+          } else {
+            line1 += "NOT SET";
+          }
+          break;
+        }
+        case WEATHER_MENU_UPDATE: {
+          line1 = "Update Weather";
+          break;
         }
       }
       break;

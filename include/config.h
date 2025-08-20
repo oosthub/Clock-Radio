@@ -26,7 +26,7 @@
 
 // EEPROM settings
 #define EEPROM_SIZE 512
-#define SETTINGS_VERSION 3
+#define SETTINGS_VERSION 4
 
 // NTP settings
 #define NTP_SERVER "pool.ntp.org"

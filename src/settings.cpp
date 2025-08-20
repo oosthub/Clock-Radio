@@ -5,6 +5,7 @@
 // Global settings variables
 String ssid = "";
 String password = "";
+String weatherApiKey = "";
 volatile int volume = 5;
 int currentStream = 0;
 bool backlightAlwaysOn = true;
@@ -29,6 +30,10 @@ void saveSettings() {
   strncpy(settings.wifiPassword, password.c_str(), sizeof(settings.wifiPassword) - 1);
   settings.wifiPassword[sizeof(settings.wifiPassword) - 1] = '\0';
   
+  // Save weather API key
+  strncpy(settings.weatherApiKey, weatherApiKey.c_str(), sizeof(settings.weatherApiKey) - 1);
+  settings.weatherApiKey[sizeof(settings.weatherApiKey) - 1] = '\0';
+  
   EEPROM.put(0, settings);
   EEPROM.commit();
 }
@@ -49,6 +54,9 @@ void loadSettings() {
     ssid = String(settings.wifiSSID);
     password = String(settings.wifiPassword);
     
+    // Load weather API key
+    weatherApiKey = String(settings.weatherApiKey);
+    
     // Validate loaded values
     if (volume < 0) volume = 5;
     if (volume > 80) volume = 80;
@@ -66,6 +74,8 @@ void loadSettings() {
     Serial.println(ssid.length() > 0 ? ssid : "Not configured");
     Serial.print("  WiFi Password: ");
     Serial.println(password.length() > 0 ? "[Configured]" : "Not configured");
+    Serial.print("  Weather API Key: ");
+    Serial.println(weatherApiKey.length() > 0 ? "[Configured]" : "Not configured");
   } else {
     // First time or version mismatch, use defaults and save them
     Serial.println("No valid settings found, using defaults");
@@ -75,6 +85,7 @@ void loadSettings() {
     radioPowerOn = true;
     ssid = "";
     password = "";
+    weatherApiKey = "";
     saveSettings();
   }
 }

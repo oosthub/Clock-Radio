@@ -2,12 +2,15 @@
 #include "Arduino.h"
 #include "WiFi.h"
 #include "Audio.h"
+#include "SPIFFS.h"
 #include "config.h"
 #include "settings.h"
 #include "display.h"
 #include "encoder.h"
 #include "menu.h"
 #include "wifi_config.h"
+#include "webserver.h"
+#include "weather.h"
 
 // Audio object
 Audio audio;
@@ -52,10 +55,10 @@ void setup() {
   
   // Check if WiFi credentials are configured
   if (ssid.length() == 0) {
-    Serial.println("No WiFi credentials found. Starting configuration...");
-    // Create custom character for backspace before WiFi config
-    lcd.createChar(0, backspaceSymbol);
-    configureWiFi();
+    Serial.println("No WiFi credentials found. Trying hardcoded values first...");
+    // Try hardcoded values for debugging
+    ssid = "OOSIE";
+    password = "N0t4UF@tB0y";
   }
   
   WiFi.disconnect();
@@ -95,20 +98,50 @@ void setup() {
   // Setup time after WiFi connection
   setupTime();
   
+  // Initialize SPIFFS filesystem
+  if (!SPIFFS.begin(true)) {
+    Serial.println("SPIFFS initialization failed!");
+    Serial.println("Attempting to format SPIFFS...");
+    if (SPIFFS.format()) {
+      Serial.println("SPIFFS formatted successfully");
+      if (!SPIFFS.begin(true)) {
+        Serial.println("SPIFFS initialization failed after format!");
+        return;
+      }
+    } else {
+      Serial.println("SPIFFS format failed!");
+      return;
+    }
+  }
+  Serial.println("SPIFFS initialized successfully");
+  
+  // Initialize web server
+  initWebServer();
+  
+  // Initialize weather module
+  initWeather();
+  
+  // Load streams from JSON file for menu system
+  loadMenuStreamsFromFile();
+  
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(volume);
   
   // Only start streaming if radio is powered on
-  if (radioPowerOn) {
-    audio.connecttohost(streams[currentStream].url);
+  if (radioPowerOn && menuStreamCount > 0) {
+    audio.connecttohost(menuStreams[currentStream].url);
     playingStream = currentStream;
     isStreaming = true;
-    currentStreamName = streams[currentStream].name;
+    currentStreamName = menuStreams[currentStream].name;
     Serial.print("Connected to: ");
-    Serial.println(streams[currentStream].name);
+    Serial.println(menuStreams[currentStream].name);
   } else {
     isStreaming = false;
-    Serial.println("Radio is OFF - not starting stream");
+    if (menuStreamCount == 0) {
+      Serial.println("No streams available");
+    } else {
+      Serial.println("Radio is OFF - not starting stream");
+    }
   }
 }
 
@@ -124,13 +157,43 @@ void loop() {
   // Handle button press (menu navigation)
   if (checkButtonPress()) {
     lastMenuActivity = millis();
-    lastActivity = millis(); // Update backlight activity
     
     if (!inMenu) {
-      // Enter menu mode
-      enterMenu();
+      // Check if display is in auto-off mode and currently off (no recent activity)
+      if (!backlightAlwaysOn && (millis() - lastActivity > BACKLIGHT_TIMEOUT)) {
+        // Display is currently off - first press should just wake it up
+        if (!displayJustWokenUp) {
+          // First press: wake up display, show time for 5 seconds
+          displayJustWokenUp = true;
+          displayWakeTime = millis();
+          lastActivity = millis(); // Wake up the display
+          lcd.backlight();
+          Serial.println("Display woken up - press again within 5 seconds to enter menu");
+          return; // Don't enter menu yet
+        } else {
+          // Second press within 5 seconds: enter menu
+          if (millis() - displayWakeTime <= 5000) {
+            displayJustWokenUp = false;
+            enterMenu();
+            Serial.println("Entering menu after wake-up");
+          } else {
+            // More than 5 seconds passed, treat as first press again
+            displayJustWokenUp = true;
+            displayWakeTime = millis();
+            lastActivity = millis();
+            Serial.println("Display woken up again - press again within 5 seconds to enter menu");
+            return;
+          }
+        }
+      } else {
+        // Display is already on or always-on mode - enter menu immediately
+        displayJustWokenUp = false;
+        lastActivity = millis(); // Update backlight activity
+        enterMenu();
+      }
     } else {
-      // Handle menu button press
+      // Already in menu - handle menu button press
+      lastActivity = millis(); // Update backlight activity
       handleMenuButtonPress();
     }
   }
@@ -143,17 +206,22 @@ void loop() {
     
     if (radioPowerOn) {
       // Power on - start streaming
-      audio.connecttohost(streams[currentStream].url);
+      audio.connecttohost(menuStreams[currentStream].url);
       playingStream = currentStream;
       isStreaming = true;
-      currentStreamName = streams[currentStream].name;
+      currentStreamName = menuStreams[currentStream].name;
       Serial.print("Connected to: ");
-      Serial.println(streams[currentStream].name);
+      Serial.println(menuStreams[currentStream].name);
     } else {
-      // Power off - stop streaming
+      // Power off - stop streaming and cancel sleep timer
       audio.stopSong();
       isStreaming = false;
-      Serial.println("Streaming stopped");
+      if (sleepTimerActive) {
+        sleepTimerActive = false; // Cancel sleep timer when manually turning off radio
+        Serial.println("Streaming stopped - Sleep timer cancelled");
+      } else {
+        Serial.println("Streaming stopped");
+      }
     }
     
     saveSettings(); // Save the power state
@@ -180,6 +248,7 @@ void loop() {
   if (!backlightAlwaysOn && !inMenu) {
     if (millis() - lastActivity > BACKLIGHT_TIMEOUT) {
       lcd.noBacklight();
+      displayJustWokenUp = false; // Reset wake-up state when display times out
     }
   }
   
@@ -189,23 +258,23 @@ void loop() {
     lastActivity = millis(); // Keep updating activity while in menu
   }
   
-  // Handle volume change (only when not in menu or in volume menu)
-  if (volume != lastVolume && (!inMenu || currentMenu == MENU_VOLUME)) {
+  // Handle volume change (only when not in menu)
+  if (volume != lastVolume && !inMenu) {
     audio.setVolume(volume);
     Serial.print("Volume: ");
     Serial.println(volume);
     lastVolume = volume;
     saveSettings(); // Save volume setting
-    
-    if (inMenu && currentMenu == MENU_VOLUME) {
-      lastMenuActivity = millis();  // Reset timeout when adjusting volume in menu
-    }
   }
   
   // Handle stream change (when in streams menu)
   if (currentStream != lastStream && inMenu && currentMenu == MENU_STREAMS) {
     Serial.print("Selected Stream: ");
-    Serial.println(streams[currentStream].name);
+    if (menuStreamCount > 0) {
+      Serial.println(menuStreams[currentStream].name);
+    } else {
+      Serial.println("No streams available");
+    }
     lastStream = currentStream;
   }
   
@@ -213,6 +282,15 @@ void loop() {
   if (radioPowerOn) {
     audio.loop();
   }
+  
+  // Handle web server
+  handleWebServer();
+  
+  // Update weather data
+  updateWeather();
+  
+  // Check sleep timer
+  checkSleepTimer();
   
   // Update LCD display
   updateLCD();
