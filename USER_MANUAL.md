@@ -315,7 +315,7 @@ Internet Radio - Stream Manager
 ┌─ Stream Management ────────────────────────────────────────┐
 │                                                            │
 │ Name (max 16 chars)    │ URL                    │ Actions  │
-│ ─────────────────────── ─────────────────────── ───────── │
+│ ─────────────────────── ─────────────────────── ─────────  │
 │ Jacaranda FM           │ https://edge.iono.fm/  │ Delete   │
 │ Pretoria FM            │ https://edge.iono.fm/  │ Delete   │
 │ [New Stream Name]      │ [Stream URL]           │ Add      │
@@ -325,7 +325,7 @@ Internet Radio - Stream Manager
 
 ┌─ Weather Configuration ────────────────────────────────────┐
 │                                                            │
-│ Weather API Key: [abc***********xyz]                      │
+│ Weather API Key: [abc***********xyz]                       │
 │                                                            │
 │               [💾 Save Weather Settings]                   │
 └────────────────────────────────────────────────────────────┘
@@ -634,4 +634,5 @@ For technical support or questions about your OOSIE Internet Radio:
 
 *OOSIE Internet Radio User Manual v1.0*
 *Last Updated: August 2025*
+
 
