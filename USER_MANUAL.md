@@ -185,10 +185,12 @@ Access the menu system with a short press of the encoder button.
 - Select any time option to start countdown
 - Radio automatically turns OFF when timer expires
 - "Zz" indicator appears on main display when active
+```
     ┌────────────────┐
     │12:34 Zz   22°C☀│
     │Jacaranda FM    │
     └────────────────┘
+```
 - Manual radio power-off cancels active timer
 
 
@@ -632,3 +634,4 @@ For technical support or questions about your OOSIE Internet Radio:
 
 *OOSIE Internet Radio User Manual v1.0*
 *Last Updated: August 2025*
+
