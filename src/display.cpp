@@ -210,7 +210,9 @@ void updateLCD() {
   
   // Get weather string for display
   String weatherStr = "";
-  if (currentWeather.valid) {
+  if (weatherApiKey.length() == 0) {
+    weatherStr = ""; // No API key, show nothing
+  } else if (currentWeather.valid) {
     weatherStr = formatTemperature(currentWeather.temperature) + currentWeather.icon;
   } else {
     weatherStr = "?" + String((char)1) + "C"; // ?°C using custom degree symbol
@@ -404,3 +406,4 @@ void displayCurrentMenuOptimized() {
   updateLCDLine(0, line0, false);
   updateLCDLine(1, line1, false);
 }
+
