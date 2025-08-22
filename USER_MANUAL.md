@@ -20,6 +20,7 @@ Welcome to your OOSIE Internet Radio! This device streams internet radio station
 
 ### Key Features:
 - **Internet Radio Streaming**: Access thousands of online radio stations
+- **Now Playing Info**: Displays track information with intelligent scrolling for long titles
 - **LCD Display**: 16x2 character display showing time, weather, and menu information
 - **Rotary Encoder Control**: Navigate menus and adjust settings
 - **Sleep Timer**: Automatic shut-off functionality
@@ -98,22 +99,54 @@ After successful setup, you'll see the main display:
 - Weather: Temperature + weather icon
 - Sleep indicator: "Zz" appears when sleep timer is active
 
-**Bottom Line**: Radio Status
-- **Radio ON + Streaming**: Current station name
+**Bottom Line**: Radio Status & Now Playing Info
+- **Radio ON + Streaming**: Alternates between station name and track information
 - **Radio ON + Not Streaming**: Empty
 - **Radio OFF**: "Radio OFF"
 
-### 4.2 Power Control
+### 4.3 Now Playing Information
+
+When a radio station provides track metadata (artist and song information), the bottom line will alternate between the station name and the current track information:
+
+**Station Name Display** (10 seconds):
+```
+┌────────────────┐
+│12:34      22°C☀│
+│  Jacaranda FM  │  ← Station name (centered)
+└────────────────┘
+```
+
+**Track Info Display** (varies):
+```
+┌────────────────┐
+│12:34      22°C☀│
+│The Beatles - He│  ← Track info (scrolling if needed)
+└────────────────┘
+```
+
+**Now Playing Behavior**:
+- **Short Track Names** (≤16 characters): Display for 10 seconds, then switch to station name
+- **Long Track Names** (>16 characters): Scroll completely through the text before switching back
+- **Scrolling Speed**: Updates every 300ms for smooth scrolling
+- **Maximum Display Time**: 20 seconds for very long track names
+- **No Track Info**: Shows only station name when metadata unavailable
+
+**Track Information Examples**:
+- `"Artist - Song Title"`
+- `"BBC News at 6pm"`
+- `"The Beatles - Hey Jude (Remastered 2009)"`
+
+### 4.4 Power Control
 - **Turn ON**: Long press (3+ seconds) when radio is OFF
 - **Turn OFF**: Long press (3+ seconds) when radio is ON
 - **Status**: LED or display indicates current state
 
-### 4.3 Volume Control
+### 4.5 Volume Control
 - **Adjust Volume**: Rotate encoder when NOT in menu mode
 - **Volume Range**: 0-80
 - **Visual Feedback**: Brief volume display overlay
 
-### 4.4 Backlight Management
+### 4.6 Backlight Management
 The display backlight has two modes:
 - **Always On**: Backlight stays on continuously
 - **Auto Off**: Backlight turns off after 5 seconds of inactivity

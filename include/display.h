@@ -16,6 +16,14 @@ extern unsigned long lastActivity;
 extern bool displayJustWokenUp;
 extern unsigned long displayWakeTime;
 
+// Now Playing Info variables
+extern String currentTrackInfo;
+extern bool hasTrackInfo;
+extern bool showTrackInfo;
+extern unsigned long lastTrackToggle;
+extern int trackScrollPosition;
+extern unsigned long lastTrackScroll;
+
 // Custom characters
 extern byte backspaceSymbol[8];
 

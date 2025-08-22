@@ -20,6 +20,14 @@ unsigned long lastActivity = 0;
 bool displayJustWokenUp = false;
 unsigned long displayWakeTime = 0;
 
+// Now Playing Info variables
+String currentTrackInfo = "";
+bool hasTrackInfo = false;
+bool showTrackInfo = false;
+unsigned long lastTrackToggle = 0;
+int trackScrollPosition = 0;
+unsigned long lastTrackScroll = 0;
+
 // Variables to track what's currently displayed to avoid unnecessary updates
 String lastDisplayedLine0 = "";
 String lastDisplayedLine1 = "";
@@ -152,6 +160,44 @@ void updateLCDLine(int line, String content, bool center) {
   }
 }
 
+bool isTrackScrollComplete(const String& fullText) {
+  if (fullText.length() <= 16) {
+    return true; // No scrolling needed, always complete
+  }
+  
+  int maxPosition = fullText.length() - 16;
+  // Consider complete when we've scrolled through the text and paused at the end
+  return trackScrollPosition > maxPosition + 5; // Almost at reset point
+}
+
+String getScrolledTrackText(const String& fullText) {
+  if (fullText.length() <= 16) {
+    // Text fits, no scrolling needed
+    trackScrollPosition = 0;
+    return fullText;
+  }
+  
+  // Check if it's time to scroll
+  if (millis() - lastTrackScroll >= 300) { // Scroll every 300ms (faster)
+    trackScrollPosition++;
+    lastTrackScroll = millis();
+    
+    // Reset scroll position when we reach the end
+    int maxPosition = fullText.length() - 16;
+    if (trackScrollPosition > maxPosition + 6) { // +6 for longer pause at end
+      trackScrollPosition = 0;
+    }
+  }
+  
+  // Get the substring to display
+  if (trackScrollPosition <= fullText.length() - 16) {
+    return fullText.substring(trackScrollPosition, trackScrollPosition + 16);
+  } else {
+    // At the end, show the last 16 characters
+    return fullText.substring(fullText.length() - 16);
+  }
+}
+
 void updateLCD() {
   // Handle WiFi configuration display separately - always update immediately
   if (wifiConfigMode) {
@@ -248,8 +294,39 @@ void updateLCD() {
     // Radio is on: Top line: Time + Weather
     updateLCDLine(0, timeWeatherLine, false);
     
-    // Bottom line: Current stream name (centered)
-    updateLCDLine(1, currentStreamName, true);
+    // Bottom line: Alternate between station name and track info (if available)
+    String bottomLineText = currentStreamName;
+    
+    if (hasTrackInfo && currentTrackInfo.length() > 0) {
+      // Check if it's time to toggle display
+      bool shouldToggle = false;
+      
+      if (currentTrackInfo.length() <= 16) {
+        // Short track name - use 10 second timer
+        shouldToggle = (millis() - lastTrackToggle >= 10000);
+      } else {
+        // Long track name - wait for scroll to complete OR 20 seconds max
+        shouldToggle = (isTrackScrollComplete(currentTrackInfo) && (millis() - lastTrackToggle >= 5000)) ||
+                      (millis() - lastTrackToggle >= 20000);
+      }
+      
+      if (shouldToggle) {
+        showTrackInfo = !showTrackInfo;
+        lastTrackToggle = millis();
+        // Reset scroll position when switching display
+        trackScrollPosition = 0;
+        lastTrackScroll = millis();
+      }
+      
+      if (showTrackInfo) {
+        bottomLineText = getScrolledTrackText(currentTrackInfo);
+      }
+    } else {
+      // No track info available, always show station name
+      showTrackInfo = false;
+    }
+    
+    updateLCDLine(1, bottomLineText, !showTrackInfo); // Center station name, don't center scrolling track info
   } else {
     // Radio is off or not streaming: Top line: Time + Weather
     updateLCDLine(0, timeWeatherLine, false);

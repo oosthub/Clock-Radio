@@ -308,12 +308,33 @@ void audio_eof_mp3(const char *info) {
 }
 void audio_showstation(const char *info) {
   Serial.print("station     "); Serial.println(info);
+  
+  // Reset track info when station changes
+  hasTrackInfo = false;
+  showTrackInfo = false;
+  currentTrackInfo = "";
 }
 void audio_showstreaminfo(const char *info) {
   Serial.print("streaminfo  "); Serial.println(info);
 }
 void audio_showstreamtitle(const char *info) {
   Serial.print("streamtitle "); Serial.println(info);
+  
+  // Update track info for display
+  if (info && strlen(info) > 0) {
+    currentTrackInfo = String(info);
+    hasTrackInfo = true;
+    // Reset the toggle timer to immediately show new track info
+    lastTrackToggle = millis() - 10000;
+    showTrackInfo = true;
+    // Reset scroll position for new track
+    trackScrollPosition = 0;
+    lastTrackScroll = millis();
+    forceImmediateLcdUpdate = true;
+  } else {
+    hasTrackInfo = false;
+    showTrackInfo = false;
+  }
 }
 void audio_bitrate(const char *info) {
   Serial.print("bitrate     "); Serial.println(info);
