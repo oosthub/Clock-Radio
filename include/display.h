@@ -16,6 +16,11 @@ extern unsigned long lastActivity;
 extern bool displayJustWokenUp;
 extern unsigned long displayWakeTime;
 
+// Import menu variables for time editing check
+extern bool editingTime;
+extern bool editingHours;
+extern bool editingMinutes;
+
 // Now Playing Info variables
 extern String currentTrackInfo;
 extern bool hasTrackInfo;
@@ -23,6 +28,12 @@ extern bool showTrackInfo;
 extern unsigned long lastTrackToggle;
 extern int trackScrollPosition;
 extern unsigned long lastTrackScroll;
+
+// Temporary message display variables
+extern bool showTemporaryMessage;
+extern String temporaryMessage;
+extern unsigned long temporaryMessageStart;
+extern unsigned long temporaryMessageDuration;
 
 // Custom characters
 extern byte backspaceSymbol[8];
@@ -33,5 +44,7 @@ void setupLCD();
 void updateLCD();
 void updateLCDLine(int line, String content, bool center = false);
 void displayCurrentMenuOptimized();
+void showTemporaryLCDMessage(String message, unsigned long duration = 3000);
+bool hasEnabledAlarms();
 
 #endif

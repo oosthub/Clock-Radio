@@ -2,6 +2,7 @@
 #include "config.h"
 #include "settings.h"
 #include "display.h"
+#include "alarm.h"
 #include "Audio.h"
 #include "WiFi.h"
 #include "ArduinoJson.h"
@@ -15,6 +16,14 @@ unsigned long lastMenuActivity = 0;
 SleepMenuState currentSleepMenu = SLEEP_MENU_BLANK;
 WiFiMenuState currentWiFiMenu = WIFI_MENU_IP;
 WeatherMenuState currentWeatherMenu = WEATHER_MENU_TEMPERATURE;
+AlarmMenuState currentAlarmMenu = ALARM_MENU_SLOT1;
+AlarmSubMenuState currentAlarmSubMenu = ALARM_SUB_BACK;
+int currentAlarmSlot = 0;
+bool inAlarmSubMenu = false;
+bool editingAlarmOption = false;
+bool editingTime = false;
+bool editingHours = false;
+bool editingMinutes = false;
 bool showingConfirmation = false;
 bool confirmationChoice = false;
 bool brightnessChanged = false;
@@ -135,6 +144,17 @@ void enterMenu() {
     currentSleepMenu = SLEEP_MENU_BLANK;
   }
   
+  // Reset alarm menu state when entering menu system (timeout recovery)
+  if (currentMenu == MENU_ALARMS) {
+    inAlarmSubMenu = false;
+    editingAlarmOption = false;
+    editingTime = false;
+    editingHours = false;
+    editingMinutes = false;
+    currentAlarmSubMenu = ALARM_SUB_BACK;
+    // Keep currentAlarmMenu and currentAlarmSlot as they were
+  }
+  
   printCurrentMenu();
   forceImmediateLcdUpdate = true;
 }
@@ -153,6 +173,12 @@ void nextMenuItem() {
   // Reset sleep menu to blank option when entering sleep menu
   if (currentMenu == MENU_SLEEP) {
     currentSleepMenu = SLEEP_MENU_BLANK;
+  }
+  
+  // Reset alarm menu when entering alarm menu
+  if (currentMenu == MENU_ALARMS) {
+    currentAlarmMenu = ALARM_MENU_BLANK;
+    currentAlarmSlot = 0;
   }
   
   printCurrentMenu();
@@ -205,6 +231,15 @@ void printCurrentMenu() {
       Serial.println("%");
       Serial.print("API Key: ");
       Serial.println(weatherApiKey.length() > 0 ? "[Configured]" : "Not configured");
+      break;
+    case MENU_ALARMS:
+      Serial.print("MENU: Alarms - Slot ");
+      Serial.print(currentAlarmSlot + 1);
+      Serial.print("/5 - ");
+      Serial.print(alarms[currentAlarmSlot].enabled ? "ENABLED" : "DISABLED");
+      Serial.print(" - ");
+      Serial.printf("%02d:%02d", alarms[currentAlarmSlot].hour, alarms[currentAlarmSlot].minute);
+      Serial.println("");
       break;
   }
 }
@@ -371,6 +406,52 @@ void handleMenuEncoderClockwise(unsigned long currentTime) {
   } else if (currentMenu == MENU_WEATHER) {
     currentWeatherMenu = (WeatherMenuState)((currentWeatherMenu + 1) % WEATHER_MENU_COUNT);
     forceImmediateLcdUpdate = true;
+  } else if (currentMenu == MENU_ALARMS) {
+    if (inAlarmSubMenu) {
+      if (editingAlarmOption) {
+        // We're editing a specific sub-menu option - rotate to change its value
+        switch (currentAlarmSubMenu) {
+          case ALARM_SUB_ENABLED:
+            alarms[currentAlarmSlot].enabled = !alarms[currentAlarmSlot].enabled;
+            break;
+          case ALARM_SUB_TIME:
+            if (editingTime) {
+              if (editingHours) {
+                // Increment hour
+                alarms[currentAlarmSlot].hour = (alarms[currentAlarmSlot].hour + 1) % 24;
+              } else if (editingMinutes) {
+                // Increment minute
+                alarms[currentAlarmSlot].minute++;
+                if (alarms[currentAlarmSlot].minute >= 60) {
+                  alarms[currentAlarmSlot].minute = 0;
+                }
+              }
+            }
+            break;
+          case ALARM_SUB_STATION:
+            alarms[currentAlarmSlot].stationIndex = (alarms[currentAlarmSlot].stationIndex + 1) % menuStreamCount;
+            break;
+          case ALARM_SUB_SCHEDULE:
+            alarms[currentAlarmSlot].schedule = (AlarmSchedule)((alarms[currentAlarmSlot].schedule + 1) % ALARM_SCHEDULE_COUNT);
+            break;
+          case ALARM_SUB_VOLUME:
+            alarms[currentAlarmSlot].maxVolume += 1;
+            if (alarms[currentAlarmSlot].maxVolume > 80) alarms[currentAlarmSlot].maxVolume = 1;
+            break;
+        }
+      } else {
+        // We're browsing sub-menu options
+        currentAlarmSubMenu = (AlarmSubMenuState)((currentAlarmSubMenu + 1) % ALARM_SUB_COUNT);
+      }
+    } else {
+      // We're browsing main alarm slots
+      currentAlarmMenu = (AlarmMenuState)((currentAlarmMenu + 1) % ALARM_MENU_COUNT);
+      // Update currentAlarmSlot based on the menu selection
+      if (currentAlarmMenu >= ALARM_MENU_SLOT1 && currentAlarmMenu <= ALARM_MENU_SLOT5) {
+        currentAlarmSlot = currentAlarmMenu; // SLOT1=0, SLOT2=1, etc.
+      }
+    }
+    forceImmediateLcdUpdate = true;
   } else if (currentMenu == MENU_STREAMS) {
     currentStream++;
     if (currentStream >= menuStreamCount) currentStream = 0;
@@ -397,6 +478,53 @@ void handleMenuEncoderCounterClockwise(unsigned long currentTime) {
     }
   } else if (currentMenu == MENU_WEATHER) {
     currentWeatherMenu = (WeatherMenuState)((currentWeatherMenu - 1 + WEATHER_MENU_COUNT) % WEATHER_MENU_COUNT);
+    forceImmediateLcdUpdate = true;
+  } else if (currentMenu == MENU_ALARMS) {
+    if (inAlarmSubMenu) {
+      if (editingAlarmOption) {
+        // We're editing a specific sub-menu option - rotate to change its value
+        switch (currentAlarmSubMenu) {
+          case ALARM_SUB_ENABLED:
+            alarms[currentAlarmSlot].enabled = !alarms[currentAlarmSlot].enabled;
+            break;
+          case ALARM_SUB_TIME:
+            if (editingTime) {
+              if (editingHours) {
+                // Decrement hour
+                alarms[currentAlarmSlot].hour = (alarms[currentAlarmSlot].hour - 1 + 24) % 24;
+              } else if (editingMinutes) {
+                // Decrement minute
+                if (alarms[currentAlarmSlot].minute == 0) {
+                  alarms[currentAlarmSlot].minute = 59;
+                } else {
+                  alarms[currentAlarmSlot].minute--;
+                }
+              }
+            }
+            break;
+          case ALARM_SUB_STATION:
+            alarms[currentAlarmSlot].stationIndex = (alarms[currentAlarmSlot].stationIndex - 1 + menuStreamCount) % menuStreamCount;
+            break;
+          case ALARM_SUB_SCHEDULE:
+            alarms[currentAlarmSlot].schedule = (AlarmSchedule)((alarms[currentAlarmSlot].schedule - 1 + ALARM_SCHEDULE_COUNT) % ALARM_SCHEDULE_COUNT);
+            break;
+          case ALARM_SUB_VOLUME:
+            alarms[currentAlarmSlot].maxVolume -= 1;
+            if (alarms[currentAlarmSlot].maxVolume < 1) alarms[currentAlarmSlot].maxVolume = 80;
+            break;
+        }
+      } else {
+        // We're browsing sub-menu options
+        currentAlarmSubMenu = (AlarmSubMenuState)((currentAlarmSubMenu - 1 + ALARM_SUB_COUNT) % ALARM_SUB_COUNT);
+      }
+    } else {
+      // We're browsing main alarm slots
+      currentAlarmMenu = (AlarmMenuState)((currentAlarmMenu - 1 + ALARM_MENU_COUNT) % ALARM_MENU_COUNT);
+      // Update currentAlarmSlot based on the menu selection
+      if (currentAlarmMenu >= ALARM_MENU_SLOT1 && currentAlarmMenu <= ALARM_MENU_SLOT5) {
+        currentAlarmSlot = currentAlarmMenu; // SLOT1=0, SLOT2=1, etc.
+      }
+    }
     forceImmediateLcdUpdate = true;
   } else if (currentMenu == MENU_STREAMS) {
     currentStream--;
@@ -439,6 +567,8 @@ void handleMenuButtonPress() {
     }
   } else if (currentMenu == MENU_WEATHER) {
     handleWeatherMenuButtonPress();
+  } else if (currentMenu == MENU_ALARMS) {
+    handleAlarmMenuButtonPress();
   } else if (currentMenu == MENU_SLEEP) {
     handleSleepMenuButtonPress();
   } else if (currentMenu == MENU_STREAMS) {
@@ -526,4 +656,186 @@ void checkSleepTimer() {
     sleepTimerActive = false;
     forceImmediateLcdUpdate = true;
   }
+}
+
+void displayAlarmMenu() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  
+  if (!inAlarmSubMenu) {
+    // Main alarm menu - show slot list
+    if (currentAlarmMenu == ALARM_MENU_BLANK) {
+      lcd.print("Alarms");
+      lcd.setCursor(0, 1);
+      lcd.print("                "); // Blank line for navigation
+      return;
+    }
+    
+    // Show "Alarms" on first line
+    lcd.print("Alarms");
+    lcd.setCursor(0, 1);
+    
+    // Show current slot option
+    switch (currentAlarmMenu) {
+      case ALARM_MENU_SLOT1:
+        lcd.print("Slot 1/5");
+        if (alarms[0].enabled) lcd.print("    ON");
+        break;
+      case ALARM_MENU_SLOT2:
+        lcd.print("Slot 2/5");
+        if (alarms[1].enabled) lcd.print("    ON");
+        break;
+      case ALARM_MENU_SLOT3:
+        lcd.print("Slot 3/5");
+        if (alarms[2].enabled) lcd.print("    ON");
+        break;
+      case ALARM_MENU_SLOT4:
+        lcd.print("Slot 4/5");
+        if (alarms[3].enabled) lcd.print("    ON");
+        break;
+      case ALARM_MENU_SLOT5:
+        lcd.print("Slot 5/5");
+        if (alarms[4].enabled) lcd.print("    ON");
+        break;
+    }
+  } else {
+    // Sub-menu - show alarm slot and status on first line
+    switch (currentAlarmSubMenu) {
+      case ALARM_SUB_BACK:
+        lcd.print(String(currentAlarmSlot + 1) + ": ON");
+        lcd.setCursor(0, 1);
+        lcd.print("< BACK");
+        break;
+      case ALARM_SUB_ENABLED:
+        lcd.print(String(currentAlarmSlot + 1) + ": Enable");
+        if (editingAlarmOption) lcd.print("    *");
+        lcd.setCursor(0, 1);
+        lcd.print(alarms[currentAlarmSlot].enabled ? "YES" : "NO");
+        break;
+      case ALARM_SUB_TIME:
+      {
+        lcd.print(String(currentAlarmSlot + 1) + ": Time");
+        if (editingAlarmOption) lcd.print("      *");
+        lcd.setCursor(0, 1);
+        
+        // Check if we should show blinking (every 500ms)
+        bool showBlink = (millis() / 500) % 2 == 0;
+        
+        // Display hours with blinking if editing
+        if (editingTime && editingHours && !showBlink) {
+          lcd.print("  "); // Blank spaces for blinking hours
+        } else {
+          if (alarms[currentAlarmSlot].hour < 10) lcd.print("0");
+          lcd.print(alarms[currentAlarmSlot].hour);
+        }
+        
+        lcd.print(":");
+        
+        // Display minutes with blinking if editing
+        if (editingTime && editingMinutes && !showBlink) {
+          lcd.print("  "); // Blank spaces for blinking minutes
+        } else {
+          if (alarms[currentAlarmSlot].minute < 10) lcd.print("0");
+          lcd.print(alarms[currentAlarmSlot].minute);
+        }
+        break;
+      }
+      case ALARM_SUB_STATION:
+        lcd.print(String(currentAlarmSlot + 1) + ": Station");
+        if (editingAlarmOption) lcd.print("   *");
+        lcd.setCursor(0, 1);
+        if (alarms[currentAlarmSlot].stationIndex < menuStreamCount) {
+          lcd.print(menuStreams[alarms[currentAlarmSlot].stationIndex].name);
+        } else {
+          lcd.print("Unknown");
+        }
+        break;
+      case ALARM_SUB_SCHEDULE:
+        lcd.print(String(currentAlarmSlot + 1) + ": Schedule");
+        if (editingAlarmOption) lcd.print("  *");
+        lcd.setCursor(0, 1);
+        switch (alarms[currentAlarmSlot].schedule) {
+          case ALARM_ONCE:
+            lcd.print("Once");
+            break;
+          case ALARM_DAILY:
+            lcd.print("Daily");
+            break;
+          case ALARM_WEEKDAYS:
+            lcd.print("Weekdays");
+            break;
+          case ALARM_WEEKENDS:
+            lcd.print("Weekends");
+            break;
+        }
+        break;
+      case ALARM_SUB_VOLUME:
+        lcd.print(String(currentAlarmSlot + 1) + ": Volume");
+        if (editingAlarmOption) lcd.print("    *");
+        lcd.setCursor(0, 1);
+        lcd.print(alarms[currentAlarmSlot].maxVolume);
+        break;
+    }
+  }
+}
+
+void handleAlarmMenuButtonPress() {
+  if (!inAlarmSubMenu) {
+    // Main alarm menu - handle slot selection
+    if (currentAlarmMenu == ALARM_MENU_BLANK) {
+      // Exit alarm menu and go to next main menu
+      nextMenuItem();
+    } else {
+      // Enter sub-menu for the selected slot
+      inAlarmSubMenu = true;
+      currentAlarmSubMenu = ALARM_SUB_BACK;
+      // currentAlarmSlot is already set based on currentAlarmMenu
+    }
+  } else {
+    // Sub-menu handling
+    if (editingAlarmOption) {
+      // We're in edit mode
+      if (currentAlarmSubMenu == ALARM_SUB_TIME && editingTime) {
+        // Special time editing state machine
+        if (editingHours) {
+          // Move from editing hours to editing minutes
+          editingHours = false;
+          editingMinutes = true;
+        } else if (editingMinutes) {
+          // Confirm time and exit time editing
+          editingMinutes = false;
+          editingTime = false;
+          editingAlarmOption = false;
+          saveSettings();
+        }
+      } else {
+        // Regular option - confirm the change and go back to browse mode
+        editingAlarmOption = false;
+        editingTime = false;
+        editingHours = false;
+        editingMinutes = false;
+        saveSettings();
+      }
+    } else {
+      // We're in sub-menu browse mode
+      if (currentAlarmSubMenu == ALARM_SUB_BACK) {
+        // Go back to main alarm menu
+        inAlarmSubMenu = false;
+        editingAlarmOption = false;
+        editingTime = false;
+        editingHours = false;
+        editingMinutes = false;
+      } else if (currentAlarmSubMenu == ALARM_SUB_TIME) {
+        // Enter time editing mode - start with hours
+        editingAlarmOption = true;
+        editingTime = true;
+        editingHours = true;
+        editingMinutes = false;
+      } else {
+        // Enter edit mode for other sub-options
+        editingAlarmOption = true;
+      }
+    }
+  }
+  forceImmediateLcdUpdate = true;
 }

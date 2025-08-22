@@ -2,6 +2,7 @@
 #define MENU_H
 
 #include "Arduino.h"
+#include "settings.h"
 
 // Menu system enums and variables
 enum MenuState {
@@ -10,7 +11,8 @@ enum MenuState {
   MENU_BRIGHTNESS = 2,
   MENU_WIFI = 3,
   MENU_WEATHER = 4,
-  MENU_COUNT = 5
+  MENU_ALARMS = 5,
+  MENU_COUNT = 6
 };
 
 enum SleepMenuState {
@@ -41,6 +43,26 @@ enum WeatherMenuState {
   WEATHER_MENU_COUNT = 5
 };
 
+enum AlarmMenuState {
+  ALARM_MENU_SLOT1 = 0,
+  ALARM_MENU_SLOT2 = 1,
+  ALARM_MENU_SLOT3 = 2,
+  ALARM_MENU_SLOT4 = 3,
+  ALARM_MENU_SLOT5 = 4,
+  ALARM_MENU_BLANK = 5,
+  ALARM_MENU_COUNT = 6
+};
+
+enum AlarmSubMenuState {
+  ALARM_SUB_BACK = 0,
+  ALARM_SUB_ENABLED = 1,
+  ALARM_SUB_TIME = 2,
+  ALARM_SUB_STATION = 3,
+  ALARM_SUB_SCHEDULE = 4,
+  ALARM_SUB_VOLUME = 5,
+  ALARM_SUB_COUNT = 6
+};
+
 // Stream structure - changed to support dynamic allocation
 struct RadioStream {
   char name[17];   // 16 characters + null terminator (same as WebRadioStream)
@@ -57,6 +79,14 @@ extern unsigned long lastMenuActivity;
 extern SleepMenuState currentSleepMenu;
 extern WiFiMenuState currentWiFiMenu;
 extern WeatherMenuState currentWeatherMenu;
+extern AlarmMenuState currentAlarmMenu;
+extern AlarmSubMenuState currentAlarmSubMenu;
+extern int currentAlarmSlot;
+extern bool inAlarmSubMenu;
+extern bool editingAlarmOption;
+extern bool editingTime;
+extern bool editingHours;
+extern bool editingMinutes;
 extern bool showingConfirmation;
 extern bool confirmationChoice;
 extern bool brightnessChanged;
@@ -88,5 +118,7 @@ void handleWeatherMenuButtonPress();
 void handleSleepMenuButtonPress();
 void setSleepTimer(int minutes);
 void checkSleepTimer();
+void displayAlarmMenu();
+void handleAlarmMenuButtonPress();
 
 #endif

@@ -2,6 +2,7 @@
 #include "config.h"
 #include "settings.h"
 #include "menu.h"
+#include "alarm.h"
 #include "wifi_config.h"
 #include "weather.h"
 #include "Wire.h"
@@ -27,6 +28,12 @@ bool showTrackInfo = false;
 unsigned long lastTrackToggle = 0;
 int trackScrollPosition = 0;
 unsigned long lastTrackScroll = 0;
+
+// Temporary message display variables
+bool showTemporaryMessage = false;
+String temporaryMessage = "";
+unsigned long temporaryMessageStart = 0;
+unsigned long temporaryMessageDuration = 3000;
 
 // Variables to track what's currently displayed to avoid unnecessary updates
 String lastDisplayedLine0 = "";
@@ -80,6 +87,39 @@ byte cloudSymbol[8] = {
   0b00000
 };
 
+byte clockSymbol[8] = {
+  0b01110,
+  0b10001,
+  0b10101,
+  0b10101,
+  0b10011,
+  0b10001,
+  0b01110,
+  0b00000
+};
+
+byte upArrowSymbol[8] = {
+  0b00100,
+  0b01110,
+  0b11111,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00000
+};
+
+
+// Helper function to check if any alarms are enabled
+bool hasEnabledAlarms() {
+  for (int i = 0; i < MAX_ALARMS; i++) {
+    if (alarms[i].enabled) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void scanI2C() {
   Serial.println("Scanning for I2C devices...");
   int deviceCount = 0;
@@ -122,7 +162,9 @@ void setupLCD() {
   lcd.createChar(1, degreeSymbol);     // Character 1: degree symbol
   lcd.createChar(2, sunSymbol);        // Character 2: sun
   lcd.createChar(3, cloudSymbol);      // Character 3: cloud
-  
+  lcd.createChar(4, clockSymbol);      // Character 4: clock
+  lcd.createChar(5, upArrowSymbol);    // Character 5: up arrow
+
   // Test if LCD is responding
   lcd.setCursor(0, 0);
   lcd.print("OOSIE Radio");
@@ -206,8 +248,31 @@ void updateLCD() {
     return;
   }
   
+  // Handle temporary message display
+  if (showTemporaryMessage) {
+    if (millis() - temporaryMessageStart >= temporaryMessageDuration) {
+      // Timeout reached, hide temporary message
+      showTemporaryMessage = false;
+      lcd.clear();
+      lastDisplayedLine0 = "";
+      lastDisplayedLine1 = "";
+      forceImmediateLcdUpdate = true;
+    } else {
+      // Show temporary message
+      updateLCDLine(0, "ALARM", true);
+      updateLCDLine(1, temporaryMessage, true);
+      return;
+    }
+  }
+  
   // Check if we need immediate update or if it's time for regular update
-  if (!forceImmediateLcdUpdate && (millis() - lastLcdUpdate < LCD_UPDATE_INTERVAL)) return;
+  // During time editing, update more frequently for blinking effect
+  unsigned long updateInterval = LCD_UPDATE_INTERVAL;
+  if (editingTime && (editingHours || editingMinutes)) {
+    updateInterval = 250; // Update every 250ms for smooth blinking
+  }
+  
+  if (!forceImmediateLcdUpdate && (millis() - lastLcdUpdate < updateInterval)) return;
   
   lastLcdUpdate = millis();
   forceImmediateLcdUpdate = false;  // Reset the flag
@@ -264,29 +329,63 @@ void updateLCD() {
     weatherStr = "?" + String((char)1) + "C"; // ?°C using custom degree symbol
   }
   
-  // Time + Weather layout: "12:34  22°C☀" or "12:34 Zz 22°C☀" if sleep timer active
+  // Time + Weather layout: "12:34 🕐 Z 22°C☀" with fixed positions for indicators
   String timeWeatherLine = String(timeStr);
   
-  // Add sleep timer indicator if active
-  String sleepIndicator = "";
+  // Add clock symbol (always reserve space for consistent positioning)
+  if (hasEnabledAlarms()) {
+    timeWeatherLine += " " + String((char)4); // Clock symbol (character 4)
+  } else {
+    timeWeatherLine += "  "; // Reserve 2 spaces (space + clock position)
+  }
+  
+  // Add sleep timer indicator (always reserve space for consistent positioning)
   if (sleepTimerActive) {
-    sleepIndicator = " Zz";
+    timeWeatherLine += " Z";
+  } else {
+    timeWeatherLine += "  "; // Reserve 2 spaces (space + Z position)
   }
   
   // Calculate spacing to right-align weather on 16-char display
-  int remainingSpace = 16 - timeWeatherLine.length() - sleepIndicator.length() - weatherStr.length();
+  int remainingSpace = 16 - timeWeatherLine.length() - weatherStr.length();
   if (remainingSpace > 0) {
-    timeWeatherLine += sleepIndicator;
     for (int i = 0; i < remainingSpace; i++) {
       timeWeatherLine += " ";
     }
     timeWeatherLine += weatherStr;
   } else {
-    // If everything doesn't fit, prioritize time and sleep indicator, then truncate weather
-    timeWeatherLine += sleepIndicator;
+    // If everything doesn't fit, truncate weather
     int maxWeatherLen = 16 - timeWeatherLine.length() - 1;
     if (maxWeatherLen > 0) {
       timeWeatherLine += " " + weatherStr.substring(0, maxWeatherLen);
+    }
+  }
+  
+  // Check for active alarm or snoozing alarm first (highest priority display)
+  if (activeAlarmIndex >= 0) {
+    // Active alarm - show alarm info and controls
+    updateLCDLine(0, "ALARM " + String(activeAlarmIndex + 1) + "  STOP" + String((char)5), false); // Character 5 is up arrow
+    updateLCDLine(1, currentStreamName, true);
+    return;
+  }
+  
+  // Check for snoozing alarm
+  int snoozingIndex = getSnoozingAlarmIndex();
+  if (snoozingIndex >= 0) {
+    // Calculate remaining snooze time
+    unsigned long snoozeElapsed = millis() - alarms[snoozingIndex].snoozeStart;
+    unsigned long snoozeTotal = ALARM_SNOOZE_MINUTES * 60 * 1000;
+    if (snoozeElapsed < snoozeTotal) {
+      unsigned long remaining = (snoozeTotal - snoozeElapsed) / 1000; // Convert to seconds
+      int minutes = remaining / 60;
+      int seconds = remaining % 60;
+      char timeStr[6];
+      sprintf(timeStr, "%02d:%02d", minutes, seconds);
+      
+      // Show time on first line, snooze countdown on second line
+      updateLCDLine(0, timeWeatherLine, false);
+      updateLCDLine(1, "SNOOZE    " + String(timeStr), false);
+      return;
     }
   }
   
@@ -478,9 +577,28 @@ void displayCurrentMenuOptimized() {
       }
       break;
     }
+    case MENU_ALARMS: {
+      // Alarm menu display is now handled by the dedicated displayAlarmMenu() function
+      displayAlarmMenu();
+      return; // Exit early since displayAlarmMenu() handles the entire display
+    }
   }
   
   updateLCDLine(0, line0, false);
   updateLCDLine(1, line1, false);
+}
+
+void showTemporaryLCDMessage(String message, unsigned long duration) {
+  showTemporaryMessage = true;
+  temporaryMessage = message;
+  temporaryMessageStart = millis();
+  temporaryMessageDuration = duration;
+  forceImmediateLcdUpdate = true;
+  
+  // Wake up display if in auto-off mode
+  if (!backlightAlwaysOn) {
+    lastActivity = millis();
+    lcd.backlight();
+  }
 }
 

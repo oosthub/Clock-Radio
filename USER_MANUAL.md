@@ -6,11 +6,12 @@
 3. [First Startup & Initial Configuration](#first-startup--initial-configuration)
 4. [Basic Operation](#basic-operation)
 5. [Menu System](#menu-system)
-6. [Web Configuration Interface](#web-configuration-interface)
-7. [Sleep Timer](#sleep-timer)
-8. [Weather Information](#weather-information)
-9. [Troubleshooting](#troubleshooting)
-10. [Technical Specifications](#technical-specifications)
+6. [Alarm System](#alarm-system)
+7. [Web Configuration Interface](#web-configuration-interface)
+8. [Sleep Timer](#sleep-timer)
+9. [Weather Information](#weather-information)
+10. [Troubleshooting](#troubleshooting)
+11. [Technical Specifications](#technical-specifications)
 
 ---
 
@@ -20,13 +21,15 @@ Welcome to your OOSIE Internet Radio! This device streams internet radio station
 
 ### Key Features:
 - **Internet Radio Streaming**: Access thousands of online radio stations
+- **5-Alarm System**: Multiple daily, weekday, weekend, and one-time alarms with fade-in
 - **Now Playing Info**: Displays track information with intelligent scrolling for long titles
-- **LCD Display**: 16x2 character display showing time, weather, and menu information
+- **LCD Display**: 16x2 character display showing time, weather, alarms, and menu information
 - **Rotary Encoder Control**: Navigate menus and adjust settings
 - **Sleep Timer**: Automatic shut-off functionality
 - **Weather Integration**: Real-time weather display with OpenWeatherMap API
 - **Web Interface**: Configure streams and settings through your browser
 - **Auto Backlight**: Intelligent display backlight management
+- **Visual Indicators**: Clock symbol for active alarms, sleep timer indicator
 
 ---
 
@@ -42,7 +45,7 @@ Welcome to your OOSIE Internet Radio! This device streams internet radio station
 ### Controls:
 - **Rotate Encoder**: Navigate between menu items or adjust volume
 - **Short Press** (< 1 second): Enter menu or confirm selection
-- **Long Press** (3+ seconds): Power radio ON/OFF
+- **Long Press** (3+ seconds): Power radio ON/OFF, stop active alarm, or cancel snooze
 
 ---
 
@@ -94,15 +97,17 @@ After successful setup, you'll see the main display:
 
 ### 4.1 Main Display Layout
 
-**Top Line**: Time + Sleep Indicator (if Set) + Weather
+**Top Line**: Time + Alarm Indicator + Sleep Indicator + Weather
 - Time format: HH:MM (24-hour)
+- Alarm indicator: Clock symbol (⚐) appears when any alarm is enabled
+- Sleep indicator: "Z" appears when sleep timer is active
 - Weather: Temperature + weather icon
-- Sleep indicator: "Zz" appears when sleep timer is active
 
 **Bottom Line**: Radio Status & Now Playing Info
 - **Radio ON + Streaming**: Alternates between station name and track information
 - **Radio ON + Not Streaming**: Empty
 - **Radio OFF**: "Radio OFF"
+- **Alarm Active**: Shows alarm information and controls
 
 ### 4.3 Now Playing Information
 
@@ -136,17 +141,62 @@ When a radio station provides track metadata (artist and song information), the 
 - `"BBC News at 6pm"`
 - `"The Beatles - Hey Jude (Remastered 2009)"`
 
-### 4.4 Power Control
+### 4.4 Alarm System
+
+The radio features a comprehensive 5-alarm system with various scheduling options:
+
+**Main Display with Active Alarm**:
+```
+┌────────────────┐
+│12:34 ⚐ Z 22°C☀│  ← Clock symbol shows enabled alarm
+│Jacaranda FM    │
+└────────────────┘
+```
+
+**Alarm Features**:
+- **5 Independent Alarms**: Each can be configured separately
+- **Multiple Schedules**: Daily, Weekdays, Weekends, or Once
+- **Fade-in Audio**: Gentle volume increase over 60 seconds
+- **Snooze Function**: 10-minute snooze with long-press to cancel
+- **Station Selection**: Each alarm can use a different radio station
+- **Visual Feedback**: Confirmation messages for all alarm actions
+
+**Alarm Operation**:
+- **When Alarm Triggers**: Audio fades in gradually from quiet to full volume
+- **Stop Alarm**: Long press (3+ seconds) during alarm
+- **Snooze Alarm**: Short press during alarm (10-minute snooze)
+- **Cancel Snooze**: Long press during snooze period
+
+**Alarm Display During Active Alarm**:
+```
+┌────────────────┐
+│ALARM 1  STOP▲ │  ← Shows which alarm, stop option
+│Jacaranda FM    │
+└────────────────┘
+```
+
+**Snooze Display**:
+```
+┌────────────────┐
+│12:34 ⚐   22°C☀│  ← Time + indicators + weather
+│SNOOZE    09:45 │  ← Snooze with remaining time (MM:SS)
+└────────────────┘
+```
+
+### 4.5 Power Control
 - **Turn ON**: Long press (3+ seconds) when radio is OFF
 - **Turn OFF**: Long press (3+ seconds) when radio is ON
+- **During Alarm**: Long press stops alarm and keeps radio off
+- **During Snooze**: Long press cancels snooze and turns radio on
 - **Status**: LED or display indicates current state
 
-### 4.5 Volume Control
+### 4.6 Volume Control
 - **Adjust Volume**: Rotate encoder when NOT in menu mode
 - **Volume Range**: 0-80
 - **Visual Feedback**: Brief volume display overlay
+- **Alarm Volume**: Independent from radio volume, preserves user settings
 
-### 4.6 Backlight Management
+### 4.7 Backlight Management
 The display backlight has two modes:
 - **Always On**: Backlight stays on continuously
 - **Auto Off**: Backlight turns off after 5 seconds of inactivity
@@ -155,11 +205,13 @@ The display backlight has two modes:
 1. First button press: Wakes display for 5 seconds
 2. Second press within 5 seconds: Enters menu system
 
+**Automatic Wake**: Display automatically wakes for alarm messages and confirmations
+
 ---
 
 ## 5. Menu System
 
-Access the menu system with a short press of the encoder button.
+Access the menu system with a short press of the encoder button. The menu system features a 6-second timeout.
 
 ### 5.1 Menu Navigation
 
@@ -174,6 +226,7 @@ Access the menu system with a short press of the encoder button.
 - **Rotate Encoder**: Move between menu items
 - **Short Press on Blank**: Move to next main menu
 - **Short Press on Option**: Sets the timer to the selected value
+- **Menu Timeout**: Automatically exits after 6 seconds of inactivity
 
 ### 5.2 Sleep Timer Menu
 
@@ -217,17 +270,100 @@ Access the menu system with a short press of the encoder button.
 **Sleep Timer Operation**:
 - Select any time option to start countdown
 - Radio automatically turns OFF when timer expires
-- "Zz" indicator appears on main display when active
+- "Z" indicator appears on main display when active
 ```
     ┌────────────────┐
-    │12:34 Zz   22°C☀│
+    │12:34 ⚐ Z 22°C☀│
     │Jacaranda FM    │
     └────────────────┘
 ```
 - Manual radio power-off cancels active timer
 
+**Timer Options**:
+- **5 minutes**: Quick testing option
+- **15 minutes**: Short nap
+- **30 minutes**: Standard sleep duration
+- **60 minutes**: Extended listening
+- **90 minutes**: Full sleep cycle
 
-### 5.3 Station Selection Menu
+### 5.3 Alarm Menu System
+
+The alarm system features a hierarchical menu with two levels of navigation:
+
+**Level 1: Alarm Slot Selection**
+```
+┌────────────────┐
+│MENU: Alarms    │
+│                │  ← Blank option (navigate to next menu)
+└────────────────┘
+
+┌────────────────┐
+│MENU: Alarms    │
+│ALARM 1         │  ← Select alarm slot 1
+└────────────────┘
+
+┌────────────────┐
+│MENU: Alarms    │
+│ALARM 2         │  ← Select alarm slot 2
+└────────────────┘
+```
+
+**Level 2: Alarm Configuration** (after selecting an alarm slot)
+```
+┌────────────────┐
+│ALARM 1         │
+│< BACK          │  ← Return to alarm slot selection
+└────────────────┘
+
+┌────────────────┐
+│ALARM 1         │
+│ENABLED: YES    │  ← Toggle alarm on/off
+└────────────────┘
+
+┌────────────────┐
+│ALARM 1         │
+│TIME: 07:30     │  ← Set alarm time (with blinking)
+└────────────────┘
+
+┌────────────────┐
+│ALARM 1         │
+│SCHEDULE: DAILY │  ← Set schedule type
+└────────────────┘
+
+┌────────────────┐
+│ALARM 1         │
+│STATION: FM1    │  ← Select radio station
+└────────────────┘
+```
+
+**Alarm Menu Navigation**:
+1. **Main Menu**: Rotate to cycle through alarm slots (1-5) and blank option
+2. **Blank Option**: Click to move to next main menu section
+3. **Alarm Slot**: Click to enter alarm configuration for that slot
+4. **Configuration**: Rotate to cycle through settings, click to edit values
+5. **Back Option**: Click to return to alarm slot selection
+
+**Time Setting with Visual Feedback**:
+When setting alarm time, hours and minutes blink to indicate editing mode:
+```
+┌────────────────┐
+│ALARM 1         │
+│TIME: 07:30     │  ← Hours blink when editing hours
+└────────────────┘
+```
+
+**Schedule Options**:
+- **DAILY**: Alarm triggers every day
+- **WEEKDAYS**: Monday through Friday only
+- **WEEKENDS**: Saturday and Sunday only
+- **ONCE**: Single trigger, then automatically disabled
+
+**Station Selection**:
+- Rotate through all available radio stations
+- Each alarm can use a different station
+- Station names display as configured in web interface
+
+### 5.4 Station Selection Menu
 
 ```
 ┌────────────────┐
@@ -241,7 +377,7 @@ Access the menu system with a short press of the encoder button.
 - Short press to select and start playing
 - Currently playing station shows in bottom line of main display
 
-### 5.4 Backlight Menu
+### 5.5 Backlight Menu
 
 ```
 ┌────────────────┐
@@ -259,7 +395,7 @@ Access the menu system with a short press of the encoder button.
 - **AUTO OFF**: Backlight turns off after 30 seconds
 - **ALWAYS ON**: Backlight remains on continuously
 
-### 5.5 WiFi Information Menu
+### 5.6 WiFi Information Menu
 
 ```
 ┌────────────────┐
@@ -293,7 +429,7 @@ Access the menu system with a short press of the encoder button.
 └────────────────┘
 ```
 
-### 5.6 Weather Menu
+### 5.7 Weather Menu
 
 ```
 ┌────────────────┐
@@ -332,14 +468,147 @@ Access the menu system with a short press of the encoder button.
 
 ---
 
-## 6. Web Configuration Interface
+## 6. Alarm System
+
+The OOSIE Internet Radio features a comprehensive alarm system with 5 independent alarms, each configurable with different schedules, stations, and settings.
+
+### 6.1 Alarm Overview
+
+**Alarm Features**:
+- **5 Independent Alarms**: Each alarm operates separately with its own settings
+- **Multiple Schedules**: Daily, Weekdays (Mon-Fri), Weekends (Sat-Sun), or Once
+- **Fade-in Audio**: Gradual volume increase over 60 seconds for gentle wake-up
+- **Station Selection**: Each alarm can use a different radio station
+- **Snooze Function**: 10-minute snooze with easy cancellation
+- **Visual Indicators**: Clock symbol shows when alarms are enabled
+- **Volume Preservation**: Alarm volume doesn't affect your saved radio volume
+
+### 6.2 Setting Up Alarms
+
+**Accessing Alarm Settings**:
+1. Short press encoder button to enter menu
+2. Rotate to "MENU: Alarms"
+3. Select desired alarm slot (ALARM 1-5)
+4. Configure each setting:
+   - **ENABLED**: Turn alarm on/off
+   - **TIME**: Set wake-up time (hours blink, then minutes blink)
+   - **SCHEDULE**: Choose trigger pattern
+   - **STATION**: Select radio station for alarm
+
+**Schedule Types**:
+- **DAILY**: Triggers every day at set time
+- **WEEKDAYS**: Monday through Friday only
+- **WEEKENDS**: Saturday and Sunday only  
+- **ONCE**: Single trigger, then automatically disables
+
+### 6.3 Alarm Operation
+
+**When Alarm Triggers**:
+```
+┌────────────────┐
+│ALARM 1  STOP▲  │  ← Shows active alarm and stop option
+│Jacaranda FM    │  ← Station name playing
+└────────────────┘
+```
+
+**Alarm Audio Behavior**:
+- Starts very quietly and fades in over 60 seconds
+- Uses the radio station configured for that alarm
+- Volume increases gradually to full alarm volume
+- Your regular radio volume setting is preserved
+
+**Stopping an Alarm**:
+- **Short Press**: Snooze for 10 minutes
+- **Long Press**: Stop alarm completely
+
+### 6.4 Snooze Function
+
+**Snooze Display**:
+```
+┌────────────────┐
+│12:34 ⚐   22°C☀│  ← Time + indicators + weather
+│SNOOZE    09:45 │  ← Snooze with remaining time (MM:SS)
+└────────────────┘
+```
+
+**Snooze Operation**:
+- **Duration**: 10 minutes
+- **Activation**: Short press during alarm
+- **Cancellation**: Long press during snooze
+- **Display**: Shows countdown timer in MM:SS format
+- **Auto-restart**: Alarm resumes after snooze period
+
+**Canceling Snooze**:
+- Long press (3+ seconds) during snooze period
+- Radio can be turned on after canceling snooze
+- Snooze cancel shows "ALARM STOPPED" confirmation
+
+### 6.5 Alarm Indicators
+
+**Main Display Indicators**:
+```
+┌────────────────┐
+│12:34 ⚐ Z 22°C☀│  ← Clock symbol (⚐) = enabled alarm
+│Jacaranda FM    │     Sleep indicator (Z) = sleep timer
+└────────────────┘
+```
+
+**Visual Feedback**:
+- **Clock Symbol (⚐)**: Appears when any alarm is enabled
+- **Confirmation Messages**: "STOPPED", "SNOOZED", "ALARM STOPPED"
+- **Backlight Activation**: Display automatically wakes for alarm messages
+
+### 6.6 Alarm Scheduling
+
+**Daily Alarms**: Perfect for regular wake-up times
+- Triggers every day at the same time
+- Remains enabled until manually turned off
+
+**Weekday Alarms**: Ideal for work schedules  
+- Monday through Friday only
+- Automatically skips weekends
+
+**Weekend Alarms**: For leisurely mornings
+- Saturday and Sunday only
+- Lets you sleep in on weekdays
+
+**Once Alarms**: For special occasions
+- Single trigger only
+- Automatically disables after triggering
+- Perfect for appointments or one-time reminders
+
+### 6.7 Advanced Features
+
+**Time Editing with Visual Feedback**:
+- Hours blink when editing hour value
+- Minutes blink when editing minute value
+- Clear indication of which field is being modified
+
+**Volume Preservation**:
+- Alarm volume is independent of radio volume
+- Your saved volume setting is never modified
+- After alarm ends, radio returns to your preferred volume
+
+**Multiple Alarm Management**:
+- All 5 alarms can be enabled simultaneously
+- Each alarm maintains separate settings
+- Easy navigation between alarm slots
+
+**Smart Triggering**:
+- Alarms check current time every minute
+- Prevents false triggers during time setting
+- Reliable operation across power cycles
+
+---
+
+## 7. Web Configuration Interface
 
 Access the web interface by connecting to the same WiFi network and opening `http://[radio-ip-address]` in your browser.
 
-### 6.1 Finding the IP Address
+### 7.1 Finding the IP Address
 The radio's IP address is displayed in the WiFi menu
 
-### 6.2 Web Interface Layout
+### 7.2 Web Interface Layout
 
 ```
 🎵 OOSIE Radio
@@ -364,7 +633,7 @@ Internet Radio - Stream Manager
 └────────────────────────────────────────────────────────────┘
 ```
 
-### 6.3 Managing Radio Stations
+### 7.3 Managing Radio Stations
 
 **Adding Stations**:
 1. Enter station name (maximum 16 characters)
@@ -386,7 +655,7 @@ Internet Radio - Stream Manager
 - Radio will restart automatically after saving streams
 - At least one stream must remain in the list
 
-### 6.4 Weather Configuration
+### 7.4 Weather Configuration
 
 **Setting Up Weather**:
 1. Visit [OpenWeatherMap.org](https://openweathermap.org/api)
@@ -401,9 +670,9 @@ Internet Radio - Stream Manager
 
 ---
 
-## 7. Sleep Timer
+## 8. Sleep Timer
 
-### 7.1 Setting Sleep Timer
+### 8.1 Setting Sleep Timer
 
 **Through Menu**:
 1. Enter menu system (short press)
@@ -412,10 +681,10 @@ Internet Radio - Stream Manager
 4. Timer starts immediately and menu exits
 
 **Visual Indicators**:
-- "Zz" appears between time and weather on main display
+- "Z" appears between time and weather on main display
 - Sleep timer resets to "blank" option when re-entering menu
 
-### 7.2 Sleep Timer Behavior
+### 8.2 Sleep Timer Behavior
 
 **Normal Operation**:
 - Radio continues playing during countdown
@@ -436,9 +705,9 @@ Internet Radio - Stream Manager
 
 ---
 
-## 8. Weather Information
+## 9. Weather Information
 
-### 8.1 Weather Display
+### 9.1 Weather Display
 
 **Main Screen Weather**:
 - Shows current temperature and weather icon
@@ -452,7 +721,7 @@ Internet Radio - Stream Manager
 - ❄ Snow
 - 🌫 Fog/Mist
 
-### 8.2 Weather Menu Details
+### 9.2 Weather Menu Details
 
 Access detailed weather information through the Weather menu:
 
@@ -462,7 +731,7 @@ Access detailed weather information through the Weather menu:
 **API Status**: Shows if API key is configured
 **Manual Update**: Force immediate weather refresh
 
-### 8.3 Weather Configuration
+### 9.3 Weather Configuration
 
 **Requirements**:
 - Active internet connection
@@ -477,9 +746,9 @@ Access detailed weather information through the Weather menu:
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
-### 9.1 Common Issues
+### 10.1 Common Issues
 
 **No WiFi Connection**:
 - Check WiFi credentials in WiFi menu
@@ -492,6 +761,7 @@ Access detailed weather information through the Weather menu:
 - Check volume level (rotate encoder outside menu)
 - Ensure stream URL is valid and accessible
 - Try different radio station
+- Check alarm volume preservation isn't interfering
 
 **Display Issues**:
 - **Blank Display**: Check power connection and backlight settings
@@ -504,7 +774,13 @@ Access detailed weather information through the Weather menu:
 - Wait up to 10 minutes for automatic update
 - Use manual update in Weather menu
 
-### 9.2 Reset Procedures
+**Alarm Issues**:
+- **Alarm Not Triggering**: Check enabled status and schedule type
+- **Wrong Station Playing**: Verify station selection in alarm settings
+- **Volume Too Loud/Quiet**: Alarm volume is independent of radio volume
+- **Clock Symbol Missing**: Ensure at least one alarm is enabled
+
+### 10.2 Reset Procedures
 
 **WiFi Reset**:
 1. Access WiFi menu
@@ -522,7 +798,7 @@ Access detailed weather information through the Weather menu:
 - Power cycle the radio (unplug and reconnect)
 - All settings preserved, temporary issues cleared
 
-### 9.3 Error Messages
+### 10.3 Error Messages
 
 **"No streams available"**:
 - Configure streams via web interface
@@ -539,11 +815,16 @@ Access detailed weather information through the Weather menu:
 - Check API usage limits
 - Ensure internet connectivity
 
+**Alarm-related errors**:
+- "ALARM STOPPED": Confirmation that alarm was manually stopped
+- "SNOOZED": Confirmation that alarm is in snooze mode
+- Missing clock symbol: Check that at least one alarm is enabled
+
 ---
 
-## 10. Technical Specifications
+## 11. Technical Specifications
 
-### 10.1 Hardware Specifications
+### 11.1 Hardware Specifications
 
 **Processor**: ESP32-S3 WROOM-1-N16R8
 - **CPU**: Dual-core Tensilica LX7 @ 240MHz
@@ -571,7 +852,7 @@ Access detailed weather information through the Weather menu:
 - **Security**: WPA/WPA2/WPA3
 - **Range**: Standard WiFi range
 
-### 10.2 Software Specifications
+### 11.2 Software Specifications
 
 **Operating System**: FreeRTOS
 **Development Framework**: Arduino/ESP-IDF
@@ -593,7 +874,7 @@ Access detailed weather information through the Weather menu:
 - Icecast
 - Shoutcast
 
-### 10.3 Power Requirements
+### 11.3 Power Requirements
 
 **Input Voltage**: 5V DC
 **Current Consumption**:
@@ -603,7 +884,7 @@ Access detailed weather information through the Weather menu:
 
 **Power Connector**: USB-C or 2.1mm DC jack
 
-### 10.4 Environmental Specifications
+### 11.4 Environmental Specifications
 
 **Operating Temperature**: 0°C to 50°C
 **Storage Temperature**: -20°C to 70°C
@@ -667,5 +948,6 @@ For technical support or questions about your OOSIE Internet Radio:
 
 *OOSIE Internet Radio User Manual v1.0*
 *Last Updated: August 2025*
+
 
 

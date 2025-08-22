@@ -8,6 +8,7 @@
 #include "display.h"
 #include "encoder.h"
 #include "menu.h"
+#include "alarm.h"
 #include "wifi_config.h"
 #include "webserver.h"
 #include "weather.h"
@@ -124,6 +125,10 @@ void setup() {
   // Load streams from JSON file for menu system
   loadMenuStreamsFromFile();
   
+  // Initialize alarm system
+  initializeAlarms();
+  alarmSystemActive = true;
+  
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(volume);
   
@@ -157,6 +162,13 @@ void loop() {
   // Handle button press (menu navigation)
   if (checkButtonPress()) {
     lastMenuActivity = millis();
+    
+    // Check if an alarm is currently ringing
+    if (activeAlarmIndex >= 0) {
+      // Alarm is active - short press = snooze
+      snoozeAlarm();
+      return; // Don't process other button logic
+    }
     
     if (!inMenu) {
       // Check if display is in auto-off mode and currently off (no recent activity)
@@ -200,6 +212,21 @@ void loop() {
   
   // Handle long button press (power on/off) - only when not in menu
   if (!inMenu && checkLongButtonPress()) {
+    // Check if an alarm is currently ringing
+    if (activeAlarmIndex >= 0) {
+      // Alarm is active - long press = stop alarm
+      stopAlarm();
+      return; // Don't process power toggle
+    }
+    
+    // Check if an alarm is currently snoozing
+    int snoozingIndex = getSnoozingAlarmIndex();
+    if (snoozingIndex >= 0) {
+      // Alarm is snoozing - long press = cancel snooze and turn on radio
+      cancelSnooze();
+      // Continue to turn on radio below
+    }
+    
     radioPowerOn = !radioPowerOn;
     Serial.print("Radio power: ");
     Serial.println(radioPowerOn ? "ON" : "OFF");
@@ -291,6 +318,9 @@ void loop() {
   
   // Check sleep timer
   checkSleepTimer();
+  
+  // Check alarms
+  checkAlarms();
   
   // Update LCD display
   updateLCD();

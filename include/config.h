@@ -19,14 +19,14 @@
 #define LCD_ROWS 2
 
 #define PULSES_PER_STEP 2
-#define MENU_TIMEOUT 5000
+#define MENU_TIMEOUT 6000
 #define LCD_UPDATE_INTERVAL 1000
 #define VOLUME_DISPLAY_TIMEOUT 5000
 #define BACKLIGHT_TIMEOUT 5000
 
 // EEPROM settings
 #define EEPROM_SIZE 512
-#define SETTINGS_VERSION 4
+#define SETTINGS_VERSION 5
 
 // NTP settings
 #define NTP_SERVER "pool.ntp.org"
