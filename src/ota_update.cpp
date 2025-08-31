@@ -282,11 +282,20 @@ bool downloadAndInstallUpdate() {
   // Download and install firmware
   http.begin(downloadUrl);
   http.addHeader("User-Agent", "ESP32-Clock-Radio");
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);  // Follow redirects automatically
   
   httpResponseCode = http.GET();
   if (httpResponseCode != 200) {
     Serial.print("Failed to download firmware: ");
     Serial.println(httpResponseCode);
+    
+    // Check if it's a redirect we can handle
+    if (httpResponseCode >= 300 && httpResponseCode < 400) {
+      String location = http.header("Location");
+      Serial.print("Redirect to: ");
+      Serial.println(location);
+    }
+    
     http.end();
     return false;
   }
