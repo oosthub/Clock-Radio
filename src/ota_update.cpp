@@ -151,11 +151,17 @@ OTAResult checkForUpdate() {
   Serial.print("Latest version: ");
   Serial.println(latestVersion);
   
-  if (isNewerVersion(currentVersion, latestVersion)) {
+  // Add "v" prefix to current version if it doesn't have one for comparison
+  String currentVersionForComparison = currentVersion;
+  if (!currentVersionForComparison.startsWith("v")) {
+    currentVersionForComparison = "v" + currentVersionForComparison;
+  }
+  
+  if (isNewerVersion(currentVersionForComparison, latestVersion)) {
     Serial.println("New version available!");
     return OTA_SUCCESS; // New version available
   } else {
-    Serial.println("No update needed");
+    Serial.println("No update needed - versions are the same or current is newer");
     return OTA_NO_UPDATE;
   }
 }
@@ -208,25 +214,60 @@ bool downloadAndInstallUpdate() {
   String payload = http.getString();
   http.end();
   
-  // Parse JSON to get download URL - increase memory allocation
-  DynamicJsonDocument doc(8192);  // Increased from 4096 to 8192 bytes
-  DeserializationError error = deserializeJson(doc, payload);
+  Serial.print("Release info response size: ");
+  Serial.println(payload.length());
   
-  if (error) {
-    Serial.print("JSON parse error: ");
-    Serial.println(error.c_str());
-    return false;
+  // Find the firmware binary download URL using string parsing to avoid JSON memory issues
+  String downloadUrl = "";
+  
+  // Look for assets array and find the firmware binary
+  int assetsStart = payload.indexOf("\"assets\":[");
+  if (assetsStart != -1) {
+    // Search within the assets array for the firmware binary
+    String searchPattern = "\"name\":\"clock-radio-firmware-v";
+    int firmwareStart = payload.indexOf(searchPattern, assetsStart);
+    
+    if (firmwareStart != -1) {
+      // Found firmware entry, now find the download URL
+      // Look for the browser_download_url that comes after the name we found
+      int urlSearchStart = firmwareStart;
+      int urlStart = payload.indexOf("\"browser_download_url\":\"https://", urlSearchStart);
+      if (urlStart != -1) {
+        urlStart += 24; // Move past "browser_download_url":""
+        int urlEnd = payload.indexOf("\"", urlStart);
+        if (urlEnd != -1) {
+          downloadUrl = payload.substring(urlStart, urlEnd);
+          Serial.print("Found download URL (string parsing): ");
+          Serial.println(downloadUrl);
+        }
+      }
+    }
   }
   
-  // Find the firmware binary in assets
-  String downloadUrl = "";
-  JsonArray assets = doc["assets"];
-  
-  for (JsonObject asset : assets) {
-    const char* name = asset["name"].as<const char*>();
-    if (name && String(name).startsWith("clock-radio-firmware-v") && String(name).endsWith(".bin")) {
-      downloadUrl = asset["browser_download_url"].as<const char*>();
-      break;
+  // Fallback to JSON parsing if string parsing fails
+  if (downloadUrl.length() == 0) {
+    Serial.println("String parsing failed, trying JSON with reduced memory...");
+    
+    // Use StaticJsonDocument for smaller memory footprint
+    const size_t capacity = JSON_ARRAY_SIZE(20) + 20*JSON_OBJECT_SIZE(10) + 2048;
+    DynamicJsonDocument doc(capacity);
+    DeserializationError error = deserializeJson(doc, payload);
+    
+    if (error) {
+      Serial.print("JSON parse error: ");
+      Serial.println(error.c_str());
+      return false;
+    }
+    
+    // Find the firmware binary in assets
+    JsonArray assets = doc["assets"];
+    
+    for (JsonObject asset : assets) {
+      const char* name = asset["name"].as<const char*>();
+      if (name && String(name).startsWith("clock-radio-firmware-v") && String(name).endsWith(".bin")) {
+        downloadUrl = asset["browser_download_url"].as<const char*>();
+        break;
+      }
     }
   }
   
@@ -254,8 +295,20 @@ bool downloadAndInstallUpdate() {
   Serial.print("Firmware size: ");
   Serial.println(contentLength);
   
-  if (contentLength <= 0) {
-    Serial.println("Invalid content length");
+  // Check if we're getting HTML instead of binary (common GitHub issue)
+  String contentType = http.header("Content-Type");
+  Serial.print("Content-Type: ");
+  Serial.println(contentType);
+  
+  if (contentType.indexOf("text/html") != -1) {
+    Serial.println("Error: Received HTML page instead of binary file!");
+    Serial.println("This usually means the download URL is incorrect.");
+    http.end();
+    return false;
+  }
+  
+  if (contentLength <= 0 || contentLength < 100000) { // Firmware should be at least 100KB
+    Serial.println("Invalid content length - firmware too small or size unknown");
     http.end();
     return false;
   }
