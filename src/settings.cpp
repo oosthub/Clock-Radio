@@ -68,6 +68,47 @@ void loadSettings() {
     // Load alarms
     for (int i = 0; i < 5; i++) {
       alarms[i] = settings.alarms[i];
+      
+      // Validate alarm data to prevent corruption
+      if (alarms[i].hour < 0 || alarms[i].hour > 23) {
+        Serial.print("Alarm ");
+        Serial.print(i + 1);
+        Serial.println(" hour corrupted, resetting to defaults");
+        alarms[i] = Alarm();
+        snprintf(alarms[i].label, sizeof(alarms[i].label), "Alarm %d", i + 1);
+      }
+      
+      if (alarms[i].minute < 0 || alarms[i].minute > 59) {
+        Serial.print("Alarm ");
+        Serial.print(i + 1);
+        Serial.println(" minute corrupted, resetting to defaults");
+        alarms[i] = Alarm();
+        snprintf(alarms[i].label, sizeof(alarms[i].label), "Alarm %d", i + 1);
+      }
+      
+      if (alarms[i].maxVolume < 1 || alarms[i].maxVolume > 80) {
+        Serial.print("Alarm ");
+        Serial.print(i + 1);
+        Serial.println(" volume corrupted, resetting to defaults");
+        alarms[i] = Alarm();
+        snprintf(alarms[i].label, sizeof(alarms[i].label), "Alarm %d", i + 1);
+      }
+      
+      if (alarms[i].schedule < 0 || alarms[i].schedule >= ALARM_SCHEDULE_COUNT) {
+        Serial.print("Alarm ");
+        Serial.print(i + 1);
+        Serial.println(" schedule corrupted, resetting to defaults");
+        alarms[i] = Alarm();
+        snprintf(alarms[i].label, sizeof(alarms[i].label), "Alarm %d", i + 1);
+      }
+      
+      if (alarms[i].autoOff < 0 || alarms[i].autoOff >= AUTO_OFF_COUNT) {
+        Serial.print("Alarm ");
+        Serial.print(i + 1);
+        Serial.println(" auto-off corrupted, resetting to defaults");
+        alarms[i] = Alarm();
+        snprintf(alarms[i].label, sizeof(alarms[i].label), "Alarm %d", i + 1);
+      }
     }
     
     // Validate loaded values
@@ -91,7 +132,23 @@ void loadSettings() {
     Serial.println(password.length() > 0 ? "[Configured]" : "Not configured");
     Serial.print("  Weather API Key: ");
     Serial.println(weatherApiKey.length() > 0 ? "[Configured]" : "Not configured");
-    Serial.print("  Alarms loaded: 5 alarms");
+    
+    // Debug alarm data
+    Serial.println("  Alarm status:");
+    for (int i = 0; i < 5; i++) {
+      Serial.print("    Alarm ");
+      Serial.print(i + 1);
+      Serial.print(": ");
+      Serial.print(alarms[i].enabled ? "ON " : "OFF");
+      Serial.print(" ");
+      Serial.printf("%02d:%02d", alarms[i].hour, alarms[i].minute);
+      Serial.print(" Station:");
+      Serial.print(alarms[i].stationIndex);
+      Serial.print(" Vol:");
+      Serial.print(alarms[i].maxVolume);
+      Serial.print(" AutoOff:");
+      Serial.println(alarms[i].autoOff);
+    }
   } else {
     // First time, version mismatch, or upgrade from older version
     Serial.print("Settings version mismatch or first time. Found version: ");
@@ -131,5 +188,17 @@ void loadSettings() {
     // Save the updated settings
     saveSettings();
     Serial.println("Settings saved with new version");
+  }
+}
+
+void resetAlarm(int alarmIndex) {
+  if (alarmIndex >= 0 && alarmIndex < 5) {
+    alarms[alarmIndex] = Alarm();  // Reset to default values
+    snprintf(alarms[alarmIndex].label, sizeof(alarms[alarmIndex].label), "Alarm %d", alarmIndex + 1);
+    saveSettings();
+    
+    Serial.print("Alarm ");
+    Serial.print(alarmIndex + 1);
+    Serial.println(" reset to defaults");
   }
 }

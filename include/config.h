@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 // Firmware version
-#define FIRMWARE_VERSION "1.0.6"
+#define FIRMWARE_VERSION "1.0.7"
 
 // Hardware pin definitions
 #define I2S_DOUT  2
@@ -29,7 +29,7 @@
 
 // EEPROM settings
 #define EEPROM_SIZE 512
-#define SETTINGS_VERSION 5
+#define SETTINGS_VERSION 6
 
 // NTP settings
 #define NTP_SERVER "pool.ntp.org"

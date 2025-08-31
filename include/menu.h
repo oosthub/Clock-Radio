@@ -67,7 +67,8 @@ enum AlarmSubMenuState {
   ALARM_SUB_STATION = 3,
   ALARM_SUB_SCHEDULE = 4,
   ALARM_SUB_VOLUME = 5,
-  ALARM_SUB_COUNT = 6
+  ALARM_SUB_AUTO_OFF = 6,
+  ALARM_SUB_COUNT = 7
 };
 
 // Stream structure - changed to support dynamic allocation

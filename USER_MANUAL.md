@@ -7,6 +7,14 @@
 4. [Basic Operation](#basic-operation)
 5. [Menu System](#menu-system)
 6. [Alarm System](#alarm-system)
+   - 6.1 [Alarm Overview](#61-alarm-overview)
+   - 6.2 [Setting Up Alarms](#62-setting-up-alarms)
+   - 6.3 [Alarm Operation](#63-alarm-operation)
+   - 6.4 [Snooze Function](#64-snooze-function)
+   - 6.5 [Alarm Indicators](#65-alarm-indicators)
+   - 6.6 [Alarm Scheduling](#66-alarm-scheduling)
+   - 6.7 [Advanced Features](#67-advanced-features)
+   - 6.8 [Auto Off Feature](#68-auto-off-feature)
 7. [Web Configuration Interface](#web-configuration-interface)
    - 7.1 [WiFi Hotspot Setup](#71-wifi-hotspot-setup)
    - 7.2 [Finding the IP Address](#72-finding-the-ip-address)
@@ -30,11 +38,12 @@ Welcome to your OOSIE Internet Radio! This device streams internet radio station
 
 ### Key Features:
 - **Internet Radio Streaming**: Access thousands of online radio stations
-- **5-Alarm System**: Multiple daily, weekday, weekend, and one-time alarms with fade-in
+- **5-Alarm System**: Multiple daily, weekday, weekend, and one-time alarms with fade-in and auto-off
 - **Now Playing Info**: Displays track information with intelligent scrolling for long titles
 - **LCD Display**: 16x2 character display showing time, weather, alarms, and menu information
 - **Rotary Encoder Control**: Navigate menus and adjust settings
 - **Sleep Timer**: Automatic shut-off functionality
+- **Auto Off Alarms**: Configurable automatic radio shutdown after alarm timeout
 - **Weather Integration**: Real-time weather display with OpenWeatherMap API
 - **Web Interface**: Configure streams and settings through your browser
 - **Auto Backlight**: Intelligent display backlight management
@@ -608,9 +617,11 @@ The OOSIE Internet Radio features a comprehensive alarm system with 5 independen
 **Alarm Features**:
 - **5 Independent Alarms**: Each alarm operates separately with its own settings
 - **Multiple Schedules**: Daily, Weekdays (Mon-Fri), Weekends (Sat-Sun), or Once
-- **Fade-in Audio**: Gradual volume increase over 60 seconds for gentle wake-up
+- **Fade-in Audio**: Gradual volume increase over 30 seconds for gentle wake-up
 - **Station Selection**: Each alarm can use a different radio station
 - **Snooze Function**: 10-minute snooze with easy cancellation
+- **Auto Timeout**: Automatic alarm stop after 5 minutes without user interaction
+- **Auto Off**: Configurable automatic radio shutdown after alarm timeout
 - **Visual Indicators**: Clock symbol shows when alarms are enabled
 - **Volume Preservation**: Alarm volume doesn't affect your saved radio volume
 
@@ -625,6 +636,8 @@ The OOSIE Internet Radio features a comprehensive alarm system with 5 independen
    - **TIME**: Set wake-up time (hours blink, then minutes blink)
    - **SCHEDULE**: Choose trigger pattern
    - **STATION**: Select radio station for alarm
+   - **VOLUME**: Set maximum alarm volume (1-80)
+   - **AUTO OFF**: Configure automatic radio shutdown (NO/5/15/30/60/90 minutes)
 
 **Schedule Types**:
 - **DAILY**: Triggers every day at set time
@@ -729,6 +742,46 @@ The OOSIE Internet Radio features a comprehensive alarm system with 5 independen
 - Alarms check current time every minute
 - Prevents false triggers during time setting
 - Reliable operation across power cycles
+
+### 6.8 Auto Off Feature
+
+The Auto Off feature provides automatic radio shutdown after an alarm has been active for a period of time, helping to save power and provide convenience.
+
+**Auto Off Settings**:
+Each alarm can be configured with an Auto Off timer:
+- **NO**: No automatic shutdown (default)
+- **5 minutes**: Radio turns off 5 minutes after alarm timeout
+- **15 minutes**: Radio turns off 15 minutes after alarm timeout
+- **30 minutes**: Radio turns off 30 minutes after alarm timeout
+- **60 minutes**: Radio turns off 60 minutes after alarm timeout
+- **90 minutes**: Radio turns off 90 minutes after alarm timeout
+
+**How Auto Off Works**:
+1. **Alarm Triggers**: Alarm starts at scheduled time
+2. **5-Minute Window**: User has 5 minutes to interact with the alarm:
+   - Short press to snooze
+   - Long press to stop
+   - Any other user activity (volume changes, menu navigation)
+3. **Automatic Timeout**: If no user interaction for 5 minutes:
+   - Alarm automatically stops
+   - Radio continues playing normally
+   - If Auto Off is configured, sleep timer activates
+4. **Sleep Timer**: Radio turns off after the specified Auto Off duration
+
+**Setting Auto Off**:
+1. Navigate to alarm settings menu
+2. Select an alarm slot (1-5)
+3. Navigate to "Auto Off" option
+4. Choose desired timeout: NO/5/15/30/60/90 minutes
+5. Setting is saved automatically
+
+**Use Cases**:
+- **Wake-up Alarm**: Set 30-minute Auto Off for gentle morning routine
+- **Power Nap**: Set 5-minute Auto Off for quick wake-up with minimal radio time
+- **Traditional Alarm**: Set "NO" to keep radio playing indefinitely
+
+**Visual Feedback**:
+When Auto Off activates, the display shows normal radio operation with sleep timer countdown if configured.
 
 ---
 
@@ -1047,6 +1100,8 @@ Access detailed weather information through the Weather menu:
 - **Wrong Station Playing**: Verify station selection in alarm settings
 - **Volume Too Loud/Quiet**: Alarm volume is independent of radio volume
 - **Clock Symbol Missing**: Ensure at least one alarm is enabled
+- **Alarm Stops Too Early**: Check Auto Off setting - alarm stops automatically after 5 minutes without user interaction
+- **Radio Turns Off After Alarm**: Auto Off feature may be enabled - check alarm's Auto Off setting
 
 ### 10.2 Reset Procedures
 
@@ -1168,6 +1223,15 @@ Access detailed weather information through the Weather menu:
 - HTTP/HTTPS
 - Icecast
 - Shoutcast
+
+**Alarm System Features**:
+- **5 Independent Alarms**: Each with separate configuration
+- **Schedule Types**: Daily, Weekdays, Weekends, Once
+- **Fade-in Audio**: 30-second gradual volume increase
+- **Snooze Function**: 10-minute snooze capability
+- **Auto Timeout**: 5-minute automatic alarm timeout
+- **Auto Off**: Configurable automatic radio shutdown (5/15/30/60/90 minutes)
+- **Volume Preservation**: Independent alarm and radio volumes
 
 ### 11.3 Power Requirements
 

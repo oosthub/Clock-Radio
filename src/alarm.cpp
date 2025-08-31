@@ -33,9 +33,11 @@ void initializeAlarms() {
     alarms[i].stationIndex = 0; // First station
     alarms[i].schedule = ALARM_WEEKDAYS;
     alarms[i].maxVolume = 40;   // Moderate volume
+    alarms[i].autoOff = AUTO_OFF_NO; // Default no auto-off
     alarms[i].isActive = false;
     alarms[i].isSnoozing = false;
     alarms[i].snoozeStart = 0;
+    alarms[i].alarmStart = 0;
   }
   
   // Load saved alarms from EEPROM
@@ -49,6 +51,48 @@ void checkAlarms() {
   
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) return;
+  
+  // Check for alarm timeout (5 minutes after alarm starts without user interaction)
+  if (activeAlarmIndex >= 0) {
+    unsigned long alarmDuration = millis() - alarms[activeAlarmIndex].alarmStart;
+    if (alarmDuration >= (ALARM_TIMEOUT_MINUTES * 60 * 1000)) {
+      // Alarm has been active for 5 minutes - automatically stop and optionally set sleep timer
+      Serial.println("Alarm timeout - automatically stopping alarm");
+      
+      // Check if this alarm has auto-off configured
+      if (alarms[activeAlarmIndex].autoOff != AUTO_OFF_NO) {
+        // Set sleep timer based on auto-off setting
+        int minutes = 0;
+        switch (alarms[activeAlarmIndex].autoOff) {
+          case AUTO_OFF_5MIN: minutes = 5; break;
+          case AUTO_OFF_15MIN: minutes = 15; break;
+          case AUTO_OFF_30MIN: minutes = 30; break;
+          case AUTO_OFF_60MIN: minutes = 60; break;
+          case AUTO_OFF_90MIN: minutes = 90; break;
+          default: break;
+        }
+        
+        if (minutes > 0) {
+          setSleepTimer(minutes);
+          Serial.print("Auto-off sleep timer set for ");
+          Serial.print(minutes);
+          Serial.println(" minutes");
+        }
+      }
+      
+      // Stop the alarm and return to normal operation
+      alarms[activeAlarmIndex].isActive = false;
+      activeAlarmIndex = -1;
+      alarmCurrentVolume = 0;
+      
+      // Restore user's original volume
+      volume = userOriginalVolume;
+      audio.setVolume(volume);
+      
+      forceImmediateLcdUpdate = true;
+      return;
+    }
+  }
   
   // Check each alarm
   for (int i = 0; i < MAX_ALARMS; i++) {
@@ -123,6 +167,7 @@ void startAlarm(int alarmIndex) {
   
   activeAlarmIndex = alarmIndex;
   alarms[alarmIndex].isActive = true;
+  alarms[alarmIndex].alarmStart = millis(); // Record when alarm started
   alarmFadeStart = millis();
   alarmCurrentVolume = 5; // Start very quiet
   
@@ -203,6 +248,7 @@ void snoozeAlarm() {
     alarms[activeAlarmIndex].isActive = false;
     alarms[activeAlarmIndex].isSnoozing = true;
     alarms[activeAlarmIndex].snoozeStart = millis();
+    // Keep alarmStart time for timeout tracking
     
     // Turn off radio during snooze
     radioPowerOn = false;

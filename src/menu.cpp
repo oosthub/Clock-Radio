@@ -463,6 +463,9 @@ void handleMenuEncoderClockwise(unsigned long currentTime) {
             alarms[currentAlarmSlot].maxVolume += 1;
             if (alarms[currentAlarmSlot].maxVolume > 80) alarms[currentAlarmSlot].maxVolume = 1;
             break;
+          case ALARM_SUB_AUTO_OFF:
+            alarms[currentAlarmSlot].autoOff = (AlarmAutoOff)((alarms[currentAlarmSlot].autoOff + 1) % AUTO_OFF_COUNT);
+            break;
         }
       } else {
         // We're browsing sub-menu options
@@ -539,6 +542,9 @@ void handleMenuEncoderCounterClockwise(unsigned long currentTime) {
           case ALARM_SUB_VOLUME:
             alarms[currentAlarmSlot].maxVolume -= 1;
             if (alarms[currentAlarmSlot].maxVolume < 1) alarms[currentAlarmSlot].maxVolume = 80;
+            break;
+          case ALARM_SUB_AUTO_OFF:
+            alarms[currentAlarmSlot].autoOff = (AlarmAutoOff)((alarms[currentAlarmSlot].autoOff - 1 + AUTO_OFF_COUNT) % AUTO_OFF_COUNT);
             break;
         }
       } else {
@@ -871,6 +877,31 @@ void displayAlarmMenu() {
         lcd.setCursor(0, 1);
         lcd.print(alarms[currentAlarmSlot].maxVolume);
         break;
+      case ALARM_SUB_AUTO_OFF:
+        lcd.print(String(currentAlarmSlot + 1) + ": Auto Off");
+        if (editingAlarmOption) lcd.print("   *");
+        lcd.setCursor(0, 1);
+        switch (alarms[currentAlarmSlot].autoOff) {
+          case AUTO_OFF_NO:
+            lcd.print("NO");
+            break;
+          case AUTO_OFF_5MIN:
+            lcd.print("5 minutes");
+            break;
+          case AUTO_OFF_15MIN:
+            lcd.print("15 minutes");
+            break;
+          case AUTO_OFF_30MIN:
+            lcd.print("30 minutes");
+            break;
+          case AUTO_OFF_60MIN:
+            lcd.print("60 minutes");
+            break;
+          case AUTO_OFF_90MIN:
+            lcd.print("90 minutes");
+            break;
+        }
+        break;
     }
   }
 }
@@ -928,7 +959,7 @@ void handleAlarmMenuButtonPress() {
         editingHours = true;
         editingMinutes = false;
       } else {
-        // Enter edit mode for other sub-options
+        // Enter edit mode for other sub-options (ENABLED, STATION, SCHEDULE, VOLUME, AUTO_OFF)
         editingAlarmOption = true;
       }
     }
