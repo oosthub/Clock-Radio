@@ -3,6 +3,7 @@
 #include "settings.h"
 #include "display.h"
 #include "alarm.h"
+#include "ota_update.h"
 #include "Audio.h"
 #include "WiFi.h"
 #include "ArduinoJson.h"
@@ -16,6 +17,7 @@ unsigned long lastMenuActivity = 0;
 SleepMenuState currentSleepMenu = SLEEP_MENU_BLANK;
 WiFiMenuState currentWiFiMenu = WIFI_MENU_IP;
 WeatherMenuState currentWeatherMenu = WEATHER_MENU_TEMPERATURE;
+SystemMenuState currentSystemMenu = SYSTEM_MENU_FIRMWARE;
 AlarmMenuState currentAlarmMenu = ALARM_MENU_SLOT1;
 AlarmSubMenuState currentAlarmSubMenu = ALARM_SUB_BACK;
 int currentAlarmSlot = 0;
@@ -241,6 +243,11 @@ void printCurrentMenu() {
       Serial.printf("%02d:%02d", alarms[currentAlarmSlot].hour, alarms[currentAlarmSlot].minute);
       Serial.println("");
       break;
+    case MENU_SYSTEM:
+      Serial.println("MENU: System");
+      Serial.print("Firmware Version: ");
+      Serial.println(FIRMWARE_VERSION);
+      break;
   }
 }
 
@@ -350,6 +357,21 @@ void displayCurrentMenu() {
       // Weather menu display is now handled in display.cpp
       break;
     }
+    case MENU_SYSTEM: {
+      lcd.setCursor(0, 0);
+      lcd.print("MENU: System");
+      lcd.setCursor(0, 1);
+      switch (currentSystemMenu) {
+        case SYSTEM_MENU_FIRMWARE:
+          lcd.print("Firm: ");
+          lcd.print(FIRMWARE_VERSION);
+          break;
+        case SYSTEM_MENU_UPDATE:
+          lcd.print("Update");
+          break;
+      }
+      break;
+    }
   }
 }
 
@@ -405,6 +427,9 @@ void handleMenuEncoderClockwise(unsigned long currentTime) {
     }
   } else if (currentMenu == MENU_WEATHER) {
     currentWeatherMenu = (WeatherMenuState)((currentWeatherMenu + 1) % WEATHER_MENU_COUNT);
+    forceImmediateLcdUpdate = true;
+  } else if (currentMenu == MENU_SYSTEM) {
+    currentSystemMenu = (SystemMenuState)((currentSystemMenu + 1) % SYSTEM_MENU_COUNT);
     forceImmediateLcdUpdate = true;
   } else if (currentMenu == MENU_ALARMS) {
     if (inAlarmSubMenu) {
@@ -478,6 +503,9 @@ void handleMenuEncoderCounterClockwise(unsigned long currentTime) {
     }
   } else if (currentMenu == MENU_WEATHER) {
     currentWeatherMenu = (WeatherMenuState)((currentWeatherMenu - 1 + WEATHER_MENU_COUNT) % WEATHER_MENU_COUNT);
+    forceImmediateLcdUpdate = true;
+  } else if (currentMenu == MENU_SYSTEM) {
+    currentSystemMenu = (SystemMenuState)((currentSystemMenu - 1 + SYSTEM_MENU_COUNT) % SYSTEM_MENU_COUNT);
     forceImmediateLcdUpdate = true;
   } else if (currentMenu == MENU_ALARMS) {
     if (inAlarmSubMenu) {
@@ -567,6 +595,8 @@ void handleMenuButtonPress() {
     }
   } else if (currentMenu == MENU_WEATHER) {
     handleWeatherMenuButtonPress();
+  } else if (currentMenu == MENU_SYSTEM) {
+    handleSystemMenuButtonPress();
   } else if (currentMenu == MENU_ALARMS) {
     handleAlarmMenuButtonPress();
   } else if (currentMenu == MENU_SLEEP) {
@@ -598,6 +628,72 @@ void handleWeatherMenuButtonPress() {
       lastWeatherUpdate = 0; // Reset timer to force immediate update
       forceWeatherUpdate(); // Call weather update function
       exitMenu(); // Exit menu after triggering update
+      break;
+  }
+}
+
+void handleSystemMenuButtonPress() {
+  switch (currentSystemMenu) {
+    case SYSTEM_MENU_FIRMWARE:
+      // Firmware version is informational - just move to next menu
+      nextMenuItem();
+      break;
+    case SYSTEM_MENU_UPDATE:
+      // Check for and perform firmware update
+      Serial.println("Firmware update requested");
+      
+      // Show checking message
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Checking for");
+      lcd.setCursor(0, 1);
+      lcd.print("updates...");
+      delay(1000);
+      
+      OTAResult result = checkForUpdate();
+      
+      if (result == OTA_NO_UPDATE) {
+        // Show "Up to Date" message briefly
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Firmware");
+        lcd.setCursor(0, 1);
+        lcd.print("Up to Date");
+        delay(2000);
+        exitMenu();
+      } else if (result == OTA_SUCCESS) {
+        // New version available - ask user to confirm
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Update found!");
+        lcd.setCursor(0, 1);
+        lcd.print("Installing...");
+        delay(1000);
+        
+        // Download and install update
+        if (downloadAndInstallUpdate()) {
+          // Update successful - device will reboot
+          Serial.println("Update completed successfully");
+        } else {
+          // Update failed
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Update Failed");
+          lcd.setCursor(0, 1);
+          lcd.print("Try again later");
+          delay(3000);
+          exitMenu();
+        }
+      } else {
+        // Network error or other issue
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Update Error");
+        lcd.setCursor(0, 1);
+        lcd.print("Check WiFi");
+        delay(3000);
+        exitMenu();
+      }
       break;
   }
 }

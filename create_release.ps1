@@ -30,6 +30,11 @@ Copy-Item ".pio\build\esp32-s3-devkitc-1\firmware.bin" "$releaseDir\clock-radio-
 Copy-Item ".pio\build\esp32-s3-devkitc-1\bootloader.bin" "$releaseDir\bootloader.bin"
 Copy-Item ".pio\build\esp32-s3-devkitc-1\partitions.bin" "$releaseDir\partitions.bin"
 
+# Copy documentation
+Write-Host "Including documentation..." -ForegroundColor Yellow
+Copy-Item "USER_MANUAL.md" "$releaseDir\USER_MANUAL.md"
+Copy-Item "README.md" "$releaseDir\PROJECT_README.md"
+
 # Create flash script for Windows
 $flashScript = @"
 @echo off
@@ -100,11 +105,18 @@ esptool.py --chip esp32s3 --port [YOUR_PORT] --baud 921600 write_flash -z 0x0 bo
 - ``partitions.bin`` - Partition table
 - ``flash_firmware.bat`` - Windows flash script
 - ``flash_firmware.sh`` - Linux/Mac flash script
+- ``USER_MANUAL.md`` - Complete user manual and setup guide
+- ``PROJECT_README.md`` - Project overview and development info
+
+## Documentation:
+- **USER_MANUAL.md**: Complete usage instructions, menu system, alarms, OTA updates
+- **PROJECT_README.md**: Hardware requirements, development setup, contribution guide
 
 ## First Time Setup:
 After flashing, the device will start WiFi configuration mode. Follow the on-screen instructions to connect to your WiFi network.
 
-For detailed usage instructions, see the USER_MANUAL.md in the repository.
+For detailed usage instructions, alarms, OTA updates, and troubleshooting, see USER_MANUAL.md.
+For hardware setup and development info, see PROJECT_README.md.
 "@
 
 Set-Content -Path "$releaseDir\README.md" -Value $releaseReadme

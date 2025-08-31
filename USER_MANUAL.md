@@ -29,6 +29,7 @@ Welcome to your OOSIE Internet Radio! This device streams internet radio station
 - **Weather Integration**: Real-time weather display with OpenWeatherMap API
 - **Web Interface**: Configure streams and settings through your browser
 - **Auto Backlight**: Intelligent display backlight management
+- **OTA Firmware Updates**: Over-the-air updates directly from GitHub releases
 - **Visual Indicators**: Clock symbol for active alarms, sleep timer indicator
 
 ---
@@ -466,6 +467,95 @@ When setting alarm time, hours and minutes blink to indicate editing mode:
   - Refresh after network connectivity issues
   - Update after changing location/traveling
 
+### 5.8 System Menu
+
+The System menu provides access to firmware information and over-the-air (OTA) updates:
+
+```
+┌────────────────┐
+│MENU: System    │
+│Firm: 1.0.2     │  → Current firmware version (info only)
+└────────────────┘
+
+┌────────────────┐
+│MENU: System    │
+│Update          │  → Check for and install firmware updates
+└────────────────┘
+```
+
+**System Menu Options**:
+
+#### Firmware Version Display
+- **Purpose**: Shows current firmware version for reference
+- **Action**: Informational only - pressing moves to next main menu
+- **Format**: "Firm: X.X.X" (e.g., "Firm: 1.0.2")
+
+#### OTA Firmware Updates
+- **Purpose**: Download and install firmware updates from GitHub
+- **Requirements**: Active WiFi connection
+- **Process**: Automatic detection, download, and installation
+
+**Update Process Flow**:
+
+1. **Check for Updates**:
+```
+┌────────────────┐
+│Checking for    │
+│updates...      │
+└────────────────┘
+```
+
+2. **No Update Available**:
+```
+┌────────────────┐
+│Firmware        │
+│Up to Date      │  ← Displayed for 2 seconds
+└────────────────┘
+```
+
+3. **Update Available**:
+```
+┌────────────────┐
+│Update found!   │
+│Installing...   │
+└────────────────┘
+```
+
+4. **Download Progress**:
+```
+┌────────────────┐
+│Updating...     │
+│35%             │  ← Real-time percentage
+└────────────────┘
+```
+
+5. **Installation Complete**:
+```
+┌────────────────┐
+│Update Complete │
+│Rebooting...    │  ← Device restarts automatically
+└────────────────┘
+```
+
+**Update Features**:
+- **Automatic Version Checking**: Compares current vs latest GitHub release
+- **Progress Display**: Real-time download and installation progress
+- **Error Handling**: Clear messages for network or installation issues
+- **Safety**: Update only proceeds if download is verified
+- **Automatic Reboot**: Device restarts with new firmware after successful update
+
+**Error Messages**:
+- **"Update Error / Check WiFi"**: Network connectivity problems
+- **"Update Failed / Try again later"**: Download or installation error
+- **"Up to Date"**: Current firmware is already the latest version
+
+**Technical Details**:
+- Updates downloaded from: `https://github.com/oosthub/Clock-Radio/releases`
+- Requires internet access to api.github.com
+- Supports semantic versioning (v1.0.1, v1.0.2, etc.)
+- Preserves all settings and configurations during update
+- Automatic rollback if update fails
+
 ---
 
 ## 6. Alarm System
@@ -820,6 +910,31 @@ Access detailed weather information through the Weather menu:
 - "SNOOZED": Confirmation that alarm is in snooze mode
 - Missing clock symbol: Check that at least one alarm is enabled
 
+**OTA Update errors**:
+- "Update Error / Check WiFi": Network connectivity issues or GitHub API unreachable
+- "Update Failed / Try again later": Download interrupted or installation error
+- "JSON parse error: NoMemory": Insufficient memory for update process (restart device)
+- "Up to Date": No newer firmware version available (normal message)
+
+### 10.4 OTA Update Troubleshooting
+
+**Update Process Fails**:
+- Ensure stable WiFi connection throughout update
+- Check that device has sufficient free memory (restart if needed)
+- Verify internet access to api.github.com and github.com
+- Try update during low network usage periods
+
+**Memory Issues During Update**:
+- Restart the radio before attempting update
+- Close any unnecessary processes or applications on your network
+- Ensure device has been running stably before update attempt
+
+**Network Connectivity for Updates**:
+- Verify WiFi signal strength is adequate
+- Test internet connectivity by checking weather updates first
+- Ensure firewall/router allows HTTPS connections to GitHub
+- Check if GitHub is accessible from your network
+
 ---
 
 ## 11. Technical Specifications
@@ -946,8 +1061,9 @@ For technical support or questions about your OOSIE Internet Radio:
 
 ---
 
-*OOSIE Internet Radio User Manual v1.0*
+*OOSIE Internet Radio User Manual v1.1*
 *Last Updated: August 2025*
+*Added: OTA Firmware Update System*
 
 
 

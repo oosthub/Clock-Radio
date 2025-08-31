@@ -12,6 +12,7 @@
 #include "wifi_config.h"
 #include "webserver.h"
 #include "weather.h"
+#include "ota_update.h"
 
 // Audio object
 Audio audio;
@@ -123,6 +124,9 @@ void setup() {
   
   // Initialize weather module
   initWeather();
+  
+  // Initialize OTA update system
+  initOTA();
   
   // Load streams from JSON file for menu system
   loadMenuStreamsFromFile();

@@ -12,7 +12,8 @@ enum MenuState {
   MENU_WIFI = 3,
   MENU_WEATHER = 4,
   MENU_ALARMS = 5,
-  MENU_COUNT = 6
+  MENU_SYSTEM = 6,
+  MENU_COUNT = 7
 };
 
 enum SleepMenuState {
@@ -41,6 +42,12 @@ enum WeatherMenuState {
   WEATHER_MENU_API_KEY = 3,
   WEATHER_MENU_UPDATE = 4,
   WEATHER_MENU_COUNT = 5
+};
+
+enum SystemMenuState {
+  SYSTEM_MENU_FIRMWARE = 0,
+  SYSTEM_MENU_UPDATE = 1,
+  SYSTEM_MENU_COUNT = 2
 };
 
 enum AlarmMenuState {
@@ -79,6 +86,7 @@ extern unsigned long lastMenuActivity;
 extern SleepMenuState currentSleepMenu;
 extern WiFiMenuState currentWiFiMenu;
 extern WeatherMenuState currentWeatherMenu;
+extern SystemMenuState currentSystemMenu;
 extern AlarmMenuState currentAlarmMenu;
 extern AlarmSubMenuState currentAlarmSubMenu;
 extern int currentAlarmSlot;
@@ -115,6 +123,7 @@ void createDefaultStreamsFile();
 void loadDefaultStreamsToMemory();
 void displayWeatherMenu();
 void handleWeatherMenuButtonPress();
+void handleSystemMenuButtonPress();
 void handleSleepMenuButtonPress();
 void setSleepTimer(int minutes);
 void checkSleepTimer();

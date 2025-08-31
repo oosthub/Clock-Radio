@@ -577,6 +577,21 @@ void displayCurrentMenuOptimized() {
       }
       break;
     }
+    case MENU_SYSTEM: {
+      line0 = "MENU: System";
+      switch (currentSystemMenu) {
+        case SYSTEM_MENU_FIRMWARE: {
+          line1 = "Firm: ";
+          line1 += FIRMWARE_VERSION;
+          break;
+        }
+        case SYSTEM_MENU_UPDATE: {
+          line1 = "Update";
+          break;
+        }
+      }
+      break;
+    }
     case MENU_ALARMS: {
       // Alarm menu display is now handled by the dedicated displayAlarmMenu() function
       displayAlarmMenu();

@@ -36,6 +36,10 @@ jobs:
         cp .pio/build/esp32-s3-devkitc-1/bootloader.bin release/
         cp .pio/build/esp32-s3-devkitc-1/partitions.bin release/
         
+        # Copy documentation
+        cp USER_MANUAL.md release/
+        cp README.md release/PROJECT_README.md
+        
         # Create flash script
         cat > release/flash_firmware.sh << 'EOF'
         #!/bin/bash
@@ -73,6 +77,17 @@ jobs:
         ```
         
         Replace `[PORT]` with your device port (COM3 on Windows, /dev/ttyUSB0 on Linux)
+        
+        ## Documentation
+        
+        - **USER_MANUAL.md**: Complete user guide with menu system, alarms, OTA updates
+        - **PROJECT_README.md**: Hardware setup, development info, and contribution guide
+        
+        ## Files Included
+        
+        - Firmware binaries (bootloader, partitions, main firmware)
+        - Flash scripts for Windows/Linux/Mac
+        - Complete documentation and user manual
         EOF
         
     - name: Create Release
@@ -100,6 +115,8 @@ jobs:
           - `partitions.bin` - Partition table
           - `flash_firmware.sh` - Linux/Mac flash script
           - `flash_firmware.bat` - Windows flash script
-          - `README.md` - Flash instructions
+          - `USER_MANUAL.md` - Complete user manual and setup guide
+          - `PROJECT_README.md` - Project overview and development info
+          - `README.md` - Quick start and flash instructions
         draft: false
         prerelease: false
