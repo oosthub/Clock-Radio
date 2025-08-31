@@ -1,6 +1,7 @@
 #include "webserver.h"
 #include "settings.h"
 #include "weather.h"
+#include "wifi_config.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
@@ -106,6 +107,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <div class="tab-nav">
                 <button class="tab-button active" onclick="openTab(event, 'streams-tab')">📻 Stream Manager</button>
                 <button class="tab-button" onclick="openTab(event, 'weather-tab')">🌤️ Weather Settings</button>
+                <button class="tab-button" onclick="openTab(event, 'wifi-tab')">📶 WiFi Settings</button>
                 <button class="tab-button" onclick="openTab(event, 'manual-tab')">📖 User Manual</button>
             </div>
         </div>
@@ -141,6 +143,29 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         <div style="text-align: center; margin-top: 30px;">
             <button onclick="saveStreams()" style="font-size: 16px; padding: 12px 24px;">💾 Save All Changes</button>
         </div>
+        </div>
+        
+        <!-- WiFi Settings Tab -->
+        <div id="wifi-tab" class="tab-content">
+            <h3>📶 WiFi Configuration</h3>
+            <p>Configure WiFi network connection for your radio.</p>
+            <div style="margin-bottom: 15px;">
+                <label for="wifiSSID" style="display: block; margin-bottom: 5px; font-weight: bold;">WiFi Network (SSID):</label>
+                <input type="text" id="wifiSSID" placeholder="Enter WiFi network name" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label for="wifiPassword" style="display: block; margin-bottom: 5px; font-weight: bold;">WiFi Password:</label>
+                <input type="password" id="wifiPassword" placeholder="Enter WiFi password" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <div style="margin-top: 5px;">
+                    <input type="checkbox" id="showPassword" onchange="togglePasswordVisibility()">
+                    <label for="showPassword" style="font-size: 14px; color: #666;">Show password</label>
+                </div>
+            </div>
+            <div style="text-align: center;">
+                <button onclick="saveWiFiSettings()" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">💾 Save & Restart</button>
+                <button onclick="testWiFiConnection()" style="background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">🔍 Test Connection</button>
+            </div>
+            <div id="wifiStatus" style="margin-top: 15px;"></div>
         </div>
         
         <!-- Weather Tab -->
@@ -196,6 +221,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         window.onload = function() {
             loadStreams();
             loadWeatherSettings();
+            loadWiFiSettings();
             setupCharCounters();
             loadUserManual();
         };
@@ -405,6 +431,96 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             });
         }
 
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('wifiPassword');
+            const showPasswordCheckbox = document.getElementById('showPassword');
+            
+            if (showPasswordCheckbox.checked) {
+                passwordInput.type = 'text';
+            } else {
+                passwordInput.type = 'password';
+            }
+        }
+
+        function testWiFiConnection() {
+            const ssid = document.getElementById('wifiSSID').value.trim();
+            const password = document.getElementById('wifiPassword').value;
+            
+            if (!ssid) {
+                showWiFiStatus('Please enter a WiFi network name (SSID)', 'error');
+                return;
+            }
+            
+            showWiFiStatus('Testing connection...', 'info');
+            
+            fetch('/test-wifi-connection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ ssid: ssid, password: password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showWiFiStatus('Connection successful! IP: ' + data.ip, 'success');
+                } else {
+                    showWiFiStatus('Connection failed: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showWiFiStatus('Error testing connection: ' + error, 'error');
+            });
+        }
+
+        function saveWiFiSettings() {
+            const ssid = document.getElementById('wifiSSID').value.trim();
+            const password = document.getElementById('wifiPassword').value;
+            
+            if (!ssid) {
+                showWiFiStatus('Please enter a WiFi network name (SSID)', 'error');
+                return;
+            }
+            
+            if (confirm('Save WiFi settings and restart the radio?\\n\\nSSID: ' + ssid)) {
+                showWiFiStatus('Saving WiFi settings...', 'info');
+                
+                fetch('/update-wifi-settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ ssid: ssid, password: password })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showWiFiStatus('WiFi settings saved! Radio is restarting...', 'success');
+                        setTimeout(() => {
+                            showWiFiStatus('Please wait 30 seconds, then connect to your regular WiFi network and access the radio at its new IP address.', 'info');
+                        }, 3000);
+                    } else {
+                        showWiFiStatus('Error: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    showWiFiStatus('Error saving WiFi settings: ' + error, 'error');
+                });
+            }
+        }
+
+        function showWiFiStatus(message, type) {
+            const statusDiv = document.getElementById('wifiStatus');
+            const className = type === 'success' ? 'success' : type === 'error' ? 'error' : 'status';
+            statusDiv.innerHTML = '<div class="status ' + className + '">' + message + '</div>';
+            
+            if (type !== 'info') {
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 10000);
+            }
+        }
+
         function loadUserManual() {
             const manualContent = document.getElementById('manualContent');
             manualContent.innerHTML = '<div class="loading">Loading user manual...</div>';
@@ -463,6 +579,101 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
             
             return html;
+        }
+
+        function loadWiFiSettings() {
+            fetch('/get-wifi-settings')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('wifiSSID').value = data.ssid || '';
+                    // Don't load password for security
+                    document.getElementById('wifiPassword').placeholder = data.hasPassword ? 
+                        'Password configured (leave blank to keep current)' : 'Enter WiFi password';
+                })
+                .catch(error => {
+                    console.log('WiFi settings not available:', error);
+                });
+        }
+
+        function togglePasswordVisibility() {
+            const passwordField = document.getElementById('wifiPassword');
+            const checkbox = document.getElementById('showPassword');
+            passwordField.type = checkbox.checked ? 'text' : 'password';
+        }
+
+        function saveWiFiSettings() {
+            const ssid = document.getElementById('wifiSSID').value.trim();
+            const password = document.getElementById('wifiPassword').value;
+            
+            if (!ssid) {
+                showStatus('Please enter a WiFi network name (SSID)', 'error');
+                return;
+            }
+            
+            if (!password && !document.getElementById('wifiPassword').placeholder.includes('configured')) {
+                showStatus('Please enter a WiFi password', 'error');
+                return;
+            }
+            
+            const wifiStatus = document.getElementById('wifiStatus');
+            wifiStatus.innerHTML = '<div style="color: #856404; background-color: #fff3cd; padding: 10px; border-radius: 5px; border: 1px solid #ffeaa7;">💾 Saving WiFi settings and restarting radio...</div>';
+            
+            fetch('/update-wifi-settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    ssid: ssid, 
+                    password: password 
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    wifiStatus.innerHTML = '<div style="color: #155724; background-color: #d4edda; padding: 10px; border-radius: 5px; border: 1px solid #c3e6cb;">✅ WiFi settings saved! Radio is restarting and will connect to the new network...</div>';
+                } else {
+                    wifiStatus.innerHTML = '<div style="color: #721c24; background-color: #f8d7da; padding: 10px; border-radius: 5px; border: 1px solid #f5c6cb;">❌ Error: ' + data.message + '</div>';
+                }
+            })
+            .catch(error => {
+                wifiStatus.innerHTML = '<div style="color: #721c24; background-color: #f8d7da; padding: 10px; border-radius: 5px; border: 1px solid #f5c6cb;">❌ Error saving WiFi settings: ' + error + '</div>';
+            });
+        }
+
+        function testWiFiConnection() {
+            const ssid = document.getElementById('wifiSSID').value.trim();
+            const password = document.getElementById('wifiPassword').value;
+            
+            if (!ssid) {
+                showStatus('Please enter a WiFi network name to test', 'error');
+                return;
+            }
+            
+            const wifiStatus = document.getElementById('wifiStatus');
+            wifiStatus.innerHTML = '<div style="color: #856404; background-color: #fff3cd; padding: 10px; border-radius: 5px; border: 1px solid #ffeaa7;">🔍 Testing WiFi connection...</div>';
+            
+            fetch('/test-wifi-connection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    ssid: ssid, 
+                    password: password 
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    wifiStatus.innerHTML = '<div style="color: #155724; background-color: #d4edda; padding: 10px; border-radius: 5px; border: 1px solid #c3e6cb;">✅ Connection test successful! You can now save these settings.</div>';
+                } else {
+                    wifiStatus.innerHTML = '<div style="color: #721c24; background-color: #f8d7da; padding: 10px; border-radius: 5px; border: 1px solid #f5c6cb;">❌ Connection failed: ' + data.message + '</div>';
+                }
+            })
+            .catch(error => {
+                wifiStatus.innerHTML = '<div style="color: #721c24; background-color: #f8d7da; padding: 10px; border-radius: 5px; border: 1px solid #f5c6cb;">❌ Error testing connection: ' + error + '</div>';
+            });
         }
     </script>
 </body>
@@ -564,6 +775,96 @@ void initWebServer() {
             request->send(200, "application/json", "{\"success\":true,\"message\":\"Weather settings saved\"}");
         } else {
             request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing API key\"}");
+        }
+    });
+    
+    // WiFi settings endpoints
+    server.on("/get-wifi-settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+        DynamicJsonDocument doc(512);
+        
+        doc["ssid"] = ssid;
+        doc["hasPassword"] = password.length() > 0;
+        // Never send the actual password for security
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    server.on("/update-wifi-settings", HTTP_POST, [](AsyncWebServerRequest *request) {
+        // Empty handler - actual processing in body handler
+    }, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        DynamicJsonDocument doc(512);
+        DeserializationError error = deserializeJson(doc, (char*)data);
+        
+        if (error) {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+            return;
+        }
+        
+        const char* newSSID = doc["ssid"];
+        const char* newPassword = doc["password"];
+        
+        if (!newSSID || strlen(newSSID) == 0) {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"SSID is required\"}");
+            return;
+        }
+        
+        // Update WiFi credentials
+        ssid = String(newSSID);
+        if (newPassword && strlen(newPassword) > 0) {
+            password = String(newPassword);
+        }
+        // If password is empty/null, keep existing password
+        
+        saveSettings(); // Save to EEPROM
+        request->send(200, "application/json", "{\"success\":true,\"message\":\"WiFi settings saved\"}");
+        
+        // Restart ESP32 to connect with new credentials
+        delay(1000);
+        ESP.restart();
+    });
+    
+    server.on("/test-wifi-connection", HTTP_POST, [](AsyncWebServerRequest *request) {
+        // Empty handler - actual processing in body handler
+    }, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        DynamicJsonDocument doc(512);
+        DeserializationError error = deserializeJson(doc, (char*)data);
+        
+        if (error) {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+            return;
+        }
+        
+        const char* testSSID = doc["ssid"];
+        const char* testPassword = doc["password"];
+        
+        if (!testSSID || strlen(testSSID) == 0) {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"SSID is required\"}");
+            return;
+        }
+        
+        // Test connection without saving
+        WiFi.disconnect();
+        delay(500);
+        
+        WiFi.begin(testSSID, testPassword ? testPassword : "");
+        
+        // Wait up to 15 seconds for connection
+        int attempts = 30; // 30 * 500ms = 15 seconds
+        while (WiFi.status() != WL_CONNECTED && attempts > 0) {
+            delay(500);
+            attempts--;
+        }
+        
+        if (WiFi.status() == WL_CONNECTED) {
+            String ip = WiFi.localIP().toString();
+            WiFi.disconnect(); // Disconnect test connection
+            delay(500);
+            
+            request->send(200, "application/json", "{\"success\":true,\"message\":\"Connection successful! IP: " + ip + "\"}");
+        } else {
+            request->send(200, "application/json", "{\"success\":false,\"message\":\"Failed to connect - check SSID and password\"}");
         }
     });
     

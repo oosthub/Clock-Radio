@@ -3,6 +3,7 @@
 #include "settings.h"
 #include "display.h"
 #include "encoder.h"
+#include "menu.h"
 #include "WiFi.h"
 #include "time.h"
 
@@ -285,4 +286,143 @@ void setupTime() {
   } else {
     Serial.println("Time synchronized with NTP server");
   }
+}
+
+bool chooseWiFiConfigMethod() {
+  int selectedOption = WIFI_CONFIG_HOTSPOT; // Start with hotspot as default
+  bool optionSelected = false;
+  unsigned long lastEncoderActivity = 0;
+  
+  // Temporarily set inMenu to true so encoder works properly
+  bool wasInMenu = inMenu;
+  inMenu = true;
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("WiFi Setup Mode:");
+  
+  while (!optionSelected) {
+    // Display current option
+    lcd.setCursor(0, 1);
+    if (selectedOption == WIFI_CONFIG_HOTSPOT) {
+      lcd.print("> Hotspot Mode  ");
+    } else {
+      lcd.print("> Manual Config ");
+    }
+    
+    // Check for encoder activity by monitoring the lastMenuActivity
+    // which gets updated by the main encoder handler
+    if (lastMenuActivity > lastEncoderActivity) {
+      // Encoder was turned - toggle selection
+      selectedOption = (selectedOption == WIFI_CONFIG_HOTSPOT) ? WIFI_CONFIG_MANUAL : WIFI_CONFIG_HOTSPOT;
+      lastEncoderActivity = lastMenuActivity;
+    }
+    
+    // Handle button press
+    if (checkButtonPress()) {
+      optionSelected = true;
+      break;
+    }
+    
+    delay(50);
+  }
+  
+  // Restore original inMenu state
+  inMenu = wasInMenu;
+  
+  return (selectedOption == WIFI_CONFIG_HOTSPOT);
+}
+
+void startWiFiHotspot() {
+  Serial.println("Starting WiFi hotspot for configuration...");
+  
+  // Stop any existing WiFi connection
+  WiFi.disconnect();
+  delay(100);
+  
+  // Configure hotspot
+  WiFi.mode(WIFI_AP);
+  WiFi.softAPConfig(HOTSPOT_IP, HOTSPOT_GATEWAY, HOTSPOT_SUBNET);
+  
+  // Create hotspot - open network if no password, secured if password exists
+  if (strlen(HOTSPOT_PASSWORD) == 0) {
+    WiFi.softAP(HOTSPOT_SSID);  // Open network
+  } else {
+    WiFi.softAP(HOTSPOT_SSID, HOTSPOT_PASSWORD);  // Secured network
+  }
+  
+  delay(2000); // Give time for AP to start
+  
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("Hotspot started. Connect to: ");
+  Serial.println(HOTSPOT_SSID);
+  
+  if (strlen(HOTSPOT_PASSWORD) == 0) {
+    Serial.println("Password: (Open network - no password required)");
+  } else {
+    Serial.print("Password: ");
+    Serial.println(HOTSPOT_PASSWORD);
+  }
+  
+  Serial.print("Then open: http://");
+  Serial.println(IP);
+  Serial.print("Hotspot IP confirmed: ");
+  Serial.println(IP);
+  Serial.println("Web server should be accessible at this IP");
+  
+  // Verify hotspot is actually running
+  if (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA) {
+    Serial.println("WiFi AP mode confirmed active");
+  } else {
+    Serial.println("ERROR: WiFi AP mode not active!");
+  }
+}
+
+void showHotspotInstructions() {
+  static unsigned long lastScreenChange = 0;
+  static int currentScreen = 0;
+  
+  unsigned long currentTime = millis();
+  
+  // Change screen every 4 seconds
+  if (currentTime - lastScreenChange >= 4000) {
+    lcd.clear();
+    
+    switch (currentScreen) {
+      case 0:
+        lcd.setCursor(0, 0);
+        lcd.print("Connect to WiFi:");
+        lcd.setCursor(0, 1);
+        lcd.print("OOSIE-Radio");
+        break;
+        
+      case 1:
+        lcd.setCursor(0, 0);
+        lcd.print("Open browser:");
+        lcd.setCursor(0, 1);
+        lcd.print("192.168.4.1");
+        break;
+        
+      case 2:
+        lcd.setCursor(0, 0);
+        lcd.print("Configure WiFi");
+        lcd.setCursor(0, 1);
+        lcd.print("via web page");
+        break;
+    }
+    
+    currentScreen = (currentScreen + 1) % 3; // Cycle through 3 screens (was 4)
+    lastScreenChange = currentTime;
+  }
+}
+
+void stopWiFiHotspot() {
+  if (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA) {
+    WiFi.softAPdisconnect(true);
+    Serial.println("WiFi hotspot stopped");
+  }
+}
+
+bool isHotspotActive() {
+  return (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA);
 }

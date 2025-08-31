@@ -59,10 +59,37 @@ void setup() {
   
   // Check if WiFi credentials are configured
   if (ssid.length() == 0) {
-    Serial.println("No WiFi credentials found. Starting WiFi configuration...");
-    // Create custom character for backspace before WiFi config
-    lcd.createChar(0, backspaceSymbol);
-    configureWiFi();
+    Serial.println("No WiFi credentials found.");
+    
+    // Let user choose configuration method
+    if (chooseWiFiConfigMethod()) {
+      // User chose hotspot mode
+      startWiFiHotspot();
+      
+      // Initialize SPIFFS for web server
+      if (!SPIFFS.begin(true)) {
+        Serial.println("SPIFFS initialization failed for hotspot mode!");
+        SPIFFS.format();
+        SPIFFS.begin(true);
+      }
+      
+      // Initialize and start web server for configuration
+      initWebServer();
+      
+      // Wait for user to configure WiFi via web interface
+      // System will restart automatically when settings are saved
+      while (true) {
+        showHotspotInstructions(); // Continuously cycle through instructions
+        delay(100); // Small delay to prevent excessive LCD updates
+        // Keep the hotspot running and web server responding
+      }
+    } else {
+      // User chose manual configuration
+      Serial.println("Starting manual WiFi configuration...");
+      // Create custom character for backspace before WiFi config
+      lcd.createChar(0, backspaceSymbol);
+      configureWiFi();
+    }
   }
   
   WiFi.disconnect();
@@ -78,18 +105,43 @@ void setup() {
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("");
-    Serial.println("WiFi connection failed after 30 seconds. Starting WiFi configuration...");
-    // Create custom character for backspace before WiFi config
-    lcd.createChar(0, backspaceSymbol);
-    configureWiFi();
+    Serial.println("WiFi connection failed after 30 seconds.");
     
-    // Try connecting again with new credentials
-    WiFi.disconnect();
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid.c_str(), password.c_str());
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
+    // Let user choose configuration method
+    if (chooseWiFiConfigMethod()) {
+      // User chose hotspot mode
+      startWiFiHotspot();
+      
+      // Initialize and start web server for configuration
+      if (!SPIFFS.begin(true)) {
+        Serial.println("SPIFFS initialization failed for hotspot mode!");
+        SPIFFS.format();
+        SPIFFS.begin(true);
+      }
+      initWebServer();
+      
+      // Wait for user to configure WiFi via web interface
+      // System will restart automatically when settings are saved
+      while (true) {
+        showHotspotInstructions(); // Continuously cycle through instructions
+        delay(100); // Small delay to prevent excessive LCD updates
+        // Keep the hotspot running and web server responding
+      }
+    } else {
+      // User chose manual configuration
+      Serial.println("Starting manual WiFi configuration...");
+      // Create custom character for backspace before WiFi config
+      lcd.createChar(0, backspaceSymbol);
+      configureWiFi();
+    
+      // Try connecting again with new credentials
+      WiFi.disconnect();
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(ssid.c_str(), password.c_str());
+      while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+      }
     }
   }
   

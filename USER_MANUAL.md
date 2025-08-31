@@ -8,12 +8,14 @@
 5. [Menu System](#menu-system)
 6. [Alarm System](#alarm-system)
 7. [Web Configuration Interface](#web-configuration-interface)
-   - 7.1 [Finding the IP Address](#71-finding-the-ip-address)
-   - 7.2 [Web Interface Layout](#72-web-interface-layout)
-   - 7.3 [Tab Navigation](#73-tab-navigation)
-   - 7.4 [Managing Radio Stations](#74-managing-radio-stations-stream-manager-tab)
-   - 7.5 [Weather Configuration](#75-weather-configuration-weather-settings-tab)
-   - 7.6 [User Manual](#76-user-manual-user-manual-tab)
+   - 7.1 [WiFi Hotspot Setup](#71-wifi-hotspot-setup)
+   - 7.2 [Finding the IP Address](#72-finding-the-ip-address)
+   - 7.3 [Web Interface Layout](#73-web-interface-layout)
+   - 7.4 [Tab Navigation](#74-tab-navigation)
+   - 7.5 [Managing Radio Stations](#75-managing-radio-stations-stream-manager-tab)
+   - 7.6 [Weather Configuration](#76-weather-configuration-weather-settings-tab)
+   - 7.7 [WiFi Settings](#77-wifi-settings-wifi-settings-tab)
+   - 7.8 [User Manual](#78-user-manual-user-manual-tab)
 8. [Sleep Timer](#sleep-timer)
 9. [Weather Information](#weather-information)
 10. [Over-the-Air (OTA) Updates](#over-the-air-ota-updates)
@@ -70,7 +72,33 @@ Connect power to your radio. You'll see the startup sequence:
 ```
 
 ### 3.2 WiFi Configuration
-If no WiFi credentials are stored, the radio will enter WiFi configuration mode:
+
+When no WiFi credentials are stored or if connection fails, the radio will present two configuration options:
+
+```
+┌────────────────┐
+│WiFi Setup Mode:│
+│> Hotspot Mode  │
+└────────────────┘
+```
+
+**Option 1: Hotspot Mode (Recommended)**
+1. Select "Hotspot Mode" and press the encoder button
+2. The radio creates a WiFi hotspot named "OOSIE-Radio" (no password required)
+3. Instructions cycle on the LCD display every 4 seconds:
+   - "Connect to WiFi: OOSIE-Radio"
+   - "Open browser: 192.168.4.1" 
+   - "Configure WiFi via web page"
+4. Connect your phone/computer to "OOSIE-Radio" network
+5. Open browser and navigate to `192.168.4.1`
+6. Click the "📶 WiFi Settings" tab
+7. Enter your WiFi network name and password
+8. Click "💾 Save & Restart"
+9. Radio automatically restarts and connects to your network
+
+**Option 2: Manual Configuration**
+1. Select "Manual Config" and press the encoder button
+2. Use encoder to select characters for WiFi network name:
 
 ```
 ┌────────────────┐
@@ -79,12 +107,18 @@ If no WiFi credentials are stored, the radio will enter WiFi configuration mode:
 └────────────────┘
 ```
 
-**To configure WiFi:**
-1. Rotate encoder to select characters
-2. Short press to confirm each character
-3. Use the backspace symbol (←) to delete characters
-4. After entering the last character, hold button for 3 seconds to confirm
-5. Repeat process for password
+3. Rotate encoder to select characters
+4. Short press to confirm each character
+5. Use the backspace symbol (←) to delete characters
+6. After entering the last character, hold button for 3 seconds to confirm
+7. Repeat process for password
+
+**Hotspot Mode Advantages:**
+- Easier to use with phone/tablet
+- Visual web interface with validation
+- Faster input for complex passwords
+- Works with any device with a web browser
+- No need to navigate character-by-character
 
 ### 3.3 Time Setup
 Once connected to WiFi, the radio automatically synchronizes time using NTP servers. No manual configuration required.
@@ -178,7 +212,7 @@ The radio features a comprehensive 5-alarm system with various scheduling option
 **Alarm Display During Active Alarm**:
 ```
 ┌────────────────┐
-│ALARM 1  STOP▲ │  ← Shows which alarm, stop option
+│ALARM 1  STOP▲  │  ← Shows which alarm, stop option
 │Jacaranda FM    │
 └────────────────┘
 ```
@@ -700,22 +734,67 @@ The OOSIE Internet Radio features a comprehensive alarm system with 5 independen
 
 ## 7. Web Configuration Interface
 
-Access the web interface by connecting to the same WiFi network and opening `http://[radio-ip-address]` in your browser.
+### 7.1 WiFi Hotspot Setup
 
-### 7.1 Finding the IP Address
+The WiFi hotspot mode provides an easy way to configure your radio's WiFi settings using any web browser:
+
+**Activating Hotspot Mode:**
+1. When prompted for WiFi configuration, select "Hotspot Mode"
+2. Radio creates an open WiFi network named "OOSIE-Radio"
+3. LCD displays rotating instructions every 4 seconds:
+
+```
+┌────────────────┐
+│Connect to WiFi:│
+│OOSIE-Radio     │  ← Connect to this network
+└────────────────┘
+
+┌────────────────┐
+│Open browser:   │
+│192.168.4.1     │  ← Navigate to this address
+└────────────────┘
+
+┌────────────────┐
+│Configure WiFi  │
+│via web page    │  ← Use web interface
+└────────────────┘
+```
+
+**Connecting to Hotspot:**
+1. On your phone/computer, connect to "OOSIE-Radio" WiFi network
+2. No password required (open network)
+3. Open web browser and go to `192.168.4.1`
+4. You'll see the full web configuration interface
+
+**WiFi Configuration via Hotspot:**
+1. Click the "📶 WiFi Settings" tab
+2. Enter your home WiFi network name (SSID)
+3. Enter your WiFi password
+4. Optional: Click "🔍 Test Connection" to verify settings
+5. Click "💾 Save & Restart"
+6. Radio automatically restarts and connects to your network
+
+**Hotspot Features:**
+- **No Password Required**: Easy connection from any device
+- **Continuous Instructions**: LCD cycles through connection steps
+- **Test Before Save**: Verify WiFi credentials before applying
+- **Automatic Restart**: Radio restarts and connects to new network
+- **Error Recovery**: If connection fails, hotspot mode is available again
+
+### 7.2 Finding the IP Address
 The radio's IP address is displayed in the WiFi menu
 
 ### 7.2 Web Interface Layout
 
-The web interface features a modern tabbed design with three main sections:
+The web interface features a modern tabbed design with four main sections:
 
 ```
 🎵 OOSIE Radio
 Internet Radio - Management Interface
 
-┌─ Tab Navigation ───────────────────────────────────────────┐
-│ [📻 Stream Manager] [🌤️ Weather Settings] [📖 User Manual] │
-└────────────────────────────────────────────────────────────┘
+┌─ Tab Navigation ──────────────────────────────────────────────────────────┐
+│ [📻 Stream Manager] [🌤️ Weather Settings] [� WiFi Settings] [📖 Manual] │
+└───────────────────────────────────────────────────────────────────────────┘
 
 📻 STREAM MANAGER TAB:
 ┌─ Stream Management ────────────────────────────────────────┐
@@ -741,8 +820,8 @@ Internet Radio - Management Interface
 
 📖 USER MANUAL TAB:
 ┌─ User Manual ──────────────────────────────────────────────┐
-│                                    [🔄 Refresh Manual]    │
-│ ┌─ Manual Content ─────────────────────────────────────────┐ │
+│                                    [🔄 Refresh Manual]     │
+│ ┌─ Manual Content ─────────────────────────────────────────┐
 │ │ # OOSIE Internet Radio - User Manual                   │ │
 │ │                                                        │ │
 │ │ ## Table of Contents                                   │ │
@@ -764,6 +843,7 @@ Internet Radio - Management Interface
 **Tab Features**:
 - **Stream Manager**: Add, edit, delete radio stations
 - **Weather Settings**: Configure OpenWeatherMap API key
+- **WiFi Settings**: Configure WiFi network credentials with testing
 - **User Manual**: View complete documentation (fetched live from GitHub)
 
 ### 7.4 Managing Radio Stations (Stream Manager Tab)
@@ -806,7 +886,34 @@ Internet Radio - Management Interface
 - To change: clear field and enter new key
 - Masked keys show placeholder: "API key is configured (masked for security)"
 
-### 7.6 User Manual (User Manual Tab)
+### 7.7 WiFi Settings (WiFi Settings Tab)
+
+**Configuring WiFi via Web Interface**:
+1. Click the "📶 WiFi Settings" tab
+2. Enter your WiFi network name (SSID) in the first field
+3. Enter your WiFi password in the second field
+4. Optional: Check "Show password" to verify entry
+5. Click "🔍 Test Connection" to verify settings before saving
+6. Click "💾 Save & Restart" to apply and restart
+
+**WiFi Configuration Features**:
+- **Connection Testing**: Verify credentials before committing changes
+- **Password Visibility**: Toggle to show/hide password during entry
+- **Automatic Restart**: Radio restarts and connects to new network
+- **Error Handling**: Clear feedback if connection fails
+- **Security**: Existing passwords are masked when loading settings
+
+**Connection Test Results**:
+- **Success**: Shows "✅ Connection test successful! You can now save these settings."
+- **Failure**: Shows "❌ Connection failed: [specific error message]"
+- **No SSID**: Shows warning to enter network name
+
+**WiFi Settings Security**:
+- Current WiFi password is never displayed (shows placeholder text)
+- Only network name (SSID) is shown when loading existing settings
+- New passwords are hidden by default with show/hide option
+
+### 7.8 User Manual (User Manual Tab)
 
 **Accessing Documentation**:
 1. Click the "📖 User Manual" tab
@@ -910,10 +1017,12 @@ Access detailed weather information through the Weather menu:
 ### 10.1 Common Issues
 
 **No WiFi Connection**:
-- Check WiFi credentials in WiFi menu
-- Ensure network is 2.4GHz (5GHz not supported)
-- Try WiFi reset if connection fails
-- Check router settings (WPA/WPA2 supported)
+- **First Time Setup**: Use hotspot mode for easier configuration
+- **Existing Setup**: Check WiFi credentials in WiFi menu or web interface
+- **Network Issues**: Ensure network is 2.4GHz (5GHz not supported)
+- **Reset Options**: Try WiFi reset if connection fails, or use hotspot mode
+- **Router Settings**: Check WPA/WPA2 support, verify network password
+- **Hotspot Recovery**: If normal WiFi fails, radio automatically offers hotspot mode
 
 **No Audio Output**:
 - Verify radio is powered ON (check display)
@@ -1035,6 +1144,8 @@ Access detailed weather information through the Weather menu:
 - **Frequency**: 2.4GHz
 - **Security**: WPA/WPA2/WPA3
 - **Range**: Standard WiFi range
+- **Hotspot Mode**: Can create "OOSIE-Radio" access point for configuration
+- **Web Interface**: Built-in web server for remote configuration
 
 ### 11.2 Software Specifications
 
