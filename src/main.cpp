@@ -19,6 +19,8 @@ Audio audio;
 void setup() {
   Serial.begin(115200);
   Serial.println("ESP32-S3 Internet Radio Starting...");
+  Serial.print("Firmware Version: ");
+  Serial.println(FIRMWARE_VERSION);
   Serial.print("Chip Model: ");
   Serial.println(ESP.getChipModel());
   Serial.print("Chip Revision: ");

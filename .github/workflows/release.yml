@@ -1,0 +1,100 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+        
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install platformio
+        
+    - name: Build firmware
+      run: |
+        pio run
+        
+    - name: Prepare release files
+      run: |
+        mkdir release
+        cp .pio/build/esp32-s3-devkitc-1/firmware.bin release/clock-radio-firmware-${{ github.ref_name }}.bin
+        cp .pio/build/esp32-s3-devkitc-1/bootloader.bin release/
+        cp .pio/build/esp32-s3-devkitc-1/partitions.bin release/
+        
+        # Create flash script
+        cat > release/flash_firmware.sh << 'EOF'
+        #!/bin/bash
+        echo "ESP32 Clock Radio ${{ github.ref_name }} - Flash Script"
+        echo "Make sure your ESP32 is connected and in download mode"
+        echo "Press Enter to continue..."
+        read
+        esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z 0x0 bootloader.bin 0x8000 partitions.bin 0x10000 clock-radio-firmware-${{ github.ref_name }}.bin
+        EOF
+        chmod +x release/flash_firmware.sh
+        
+        # Create Windows flash script
+        cat > release/flash_firmware.bat << 'EOF'
+        @echo off
+        echo ESP32 Clock Radio ${{ github.ref_name }} - Flash Script
+        echo Make sure your ESP32 is connected and in download mode
+        pause
+        esptool.py --chip esp32s3 --port COM3 --baud 921600 write_flash -z 0x0 bootloader.bin 0x8000 partitions.bin 0x10000 clock-radio-firmware-${{ github.ref_name }}.bin
+        pause
+        EOF
+        
+        # Create release README
+        cat > release/README.md << 'EOF'
+        # ESP32 Clock Radio ${{ github.ref_name }}
+        
+        ## Flash Instructions
+        
+        1. Install esptool: `pip install esptool`
+        2. Connect ESP32-S3 via USB
+        3. Put device in download mode (hold BOOT + press RESET)
+        4. Run flash script or manual command:
+        
+        ```
+        esptool.py --chip esp32s3 --port [PORT] --baud 921600 write_flash -z 0x0 bootloader.bin 0x8000 partitions.bin 0x10000 clock-radio-firmware-${{ github.ref_name }}.bin
+        ```
+        
+        Replace `[PORT]` with your device port (COM3 on Windows, /dev/ttyUSB0 on Linux)
+        EOF
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          release/*
+        body: |
+          ## ESP32 Clock Radio ${{ github.ref_name }}
+          
+          ### What's New
+          - Latest firmware build for ESP32-S3
+          - Ready-to-flash binary files included
+          
+          ### Installation
+          1. Download the release ZIP
+          2. Extract files
+          3. Follow README.md instructions to flash
+          
+          ### Files Included
+          - `clock-radio-firmware-${{ github.ref_name }}.bin` - Main firmware
+          - `bootloader.bin` - ESP32 bootloader  
+          - `partitions.bin` - Partition table
+          - `flash_firmware.sh` - Linux/Mac flash script
+          - `flash_firmware.bat` - Windows flash script
+          - `README.md` - Flash instructions
+        draft: false
+        prerelease: false
