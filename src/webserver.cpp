@@ -1,0 +1,499 @@
+#include "webserver.h"
+#include "settings.h"
+#include "weather.h"
+#include <WiFi.h>
+#include <ArduinoJson.h>
+#include <SPIFFS.h>
+
+AsyncWebServer server(80);
+
+// Stream storage for web interface
+WebRadioStream webStreams[MAX_WEB_STREAMS];
+int webStreamCount = 0;
+
+// HTML page for managing streams
+const char htmlPage[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>OOSIE Radio - Stream Manager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial; margin: 20px; background-color: #f0f0f0; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; margin-bottom: 10px; }
+        h2 { color: #666; text-align: center; margin-top: 0; margin-bottom: 30px; font-weight: normal; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #4CAF50; color: white; }
+        tr:hover { background-color: #f5f5f5; }
+        input[type="text"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .name-input { max-width: 150px; }
+        .url-input { min-width: 300px; }
+        button { background-color: #4CAF50; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; margin: 2px; }
+        button:hover { background-color: #45a049; }
+        .delete-btn { background-color: #f44336; }
+        .delete-btn:hover { background-color: #da190b; }
+        .add-row { background-color: #e8f5e8; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .char-count { font-size: 12px; color: #666; }
+        .over-limit { color: #f44336; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 OOSIE Radio</h1>
+        <h2>Internet Radio - Stream Manager</h2>
+        <div id="status"></div>
+        
+        <table id="streamTable">
+            <thead>
+                <tr>
+                    <th>Name (max 16 chars)</th>
+                    <th>URL</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="streamTableBody">
+            </tbody>
+            <tfoot>
+                <tr class="add-row">
+                    <td>
+                        <input type="text" id="newName" placeholder="Stream name" maxlength="16">
+                        <div class="char-count" id="nameCharCount">0/16</div>
+                    </td>
+                    <td>
+                        <input type="text" id="newUrl" placeholder="http://example.com/stream.m3u8" class="url-input">
+                    </td>
+                    <td>
+                        <button onclick="addStream()">Add Stream</button>
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <button onclick="saveStreams()" style="font-size: 16px; padding: 12px 24px;">💾 Save All Changes</button>
+        </div>
+        
+        <!-- Weather Configuration Section -->
+        <div style="margin-top: 40px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+            <h3>🌤️ Weather Configuration</h3>
+            <p>Get your free API key from <a href="https://openweathermap.org/api" target="_blank">OpenWeatherMap</a></p>
+            <div style="margin-bottom: 15px;">
+                <label for="weatherApiKey" style="display: block; margin-bottom: 5px; font-weight: bold;">Weather API Key:</label>
+                <input type="text" id="weatherApiKey" placeholder="Enter your OpenWeatherMap API key" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div style="text-align: center;">
+                <button onclick="saveWeatherSettings()" style="background-color: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">💾 Save Weather Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let streams = [];
+
+        // Load streams on page load
+        window.onload = function() {
+            loadStreams();
+            loadWeatherSettings();
+            setupCharCounters();
+        };
+
+        function setupCharCounters() {
+            document.getElementById('newName').addEventListener('input', function() {
+                updateCharCount('newName', 'nameCharCount');
+            });
+        }
+
+        function updateCharCount(inputId, countId) {
+            const input = document.getElementById(inputId);
+            const counter = document.getElementById(countId);
+            const count = input.value.length;
+            counter.textContent = count + '/16';
+            
+            if (count > 16) {
+                counter.classList.add('over-limit');
+                input.style.borderColor = '#f44336';
+            } else {
+                counter.classList.remove('over-limit');
+                input.style.borderColor = '#ddd';
+            }
+        }
+
+        function loadStreams() {
+            fetch('/get-streams')
+                .then(response => response.json())
+                .then(data => {
+                    streams = data;
+                    updateTable();
+                })
+                .catch(error => {
+                    showStatus('Error loading streams: ' + error, 'error');
+                });
+        }
+
+        function updateTable() {
+            const tbody = document.getElementById('streamTableBody');
+            tbody.innerHTML = '';
+            
+            streams.forEach((stream, index) => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>
+                        <input type="text" value="${stream.name}" onchange="updateStream(${index}, 'name', this.value)" maxlength="16">
+                        <div class="char-count">${stream.name.length}/16</div>
+                    </td>
+                    <td>
+                        <input type="text" value="${stream.url}" onchange="updateStream(${index}, 'url', this.value)" class="url-input">
+                    </td>
+                    <td>
+                        <button class="delete-btn" onclick="deleteStream(${index})">Delete</button>
+                    </td>
+                `;
+            });
+        }
+
+        function updateStream(index, field, value) {
+            if (field === 'name' && value.length > 16) {
+                showStatus('Stream name cannot exceed 16 characters', 'error');
+                return;
+            }
+            streams[index][field] = value;
+        }
+
+        function addStream() {
+            const name = document.getElementById('newName').value.trim();
+            const url = document.getElementById('newUrl').value.trim();
+            
+            if (!name || !url) {
+                showStatus('Please enter both name and URL', 'error');
+                return;
+            }
+            
+            if (name.length > 16) {
+                showStatus('Stream name cannot exceed 16 characters', 'error');
+                return;
+            }
+            
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                showStatus('URL must start with http:// or https://', 'error');
+                return;
+            }
+            
+            streams.push({ name: name, url: url });
+            updateTable();
+            
+            // Clear inputs
+            document.getElementById('newName').value = '';
+            document.getElementById('newUrl').value = '';
+            document.getElementById('nameCharCount').textContent = '0/16';
+            
+            showStatus('Stream added. Remember to save changes!', 'success');
+        }
+
+        function deleteStream(index) {
+            if (confirm('Are you sure you want to delete this stream?')) {
+                streams.splice(index, 1);
+                updateTable();
+                showStatus('Stream deleted. Remember to save changes!', 'success');
+            }
+        }
+
+        function saveStreams() {
+            if (streams.length === 0) {
+                showStatus('Cannot save empty stream list', 'error');
+                return;
+            }
+            
+            // Validate all streams
+            for (let i = 0; i < streams.length; i++) {
+                if (!streams[i].name || !streams[i].url) {
+                    showStatus('All streams must have both name and URL', 'error');
+                    return;
+                }
+                if (streams[i].name.length > 16) {
+                    showStatus('All stream names must be 16 characters or less', 'error');
+                    return;
+                }
+            }
+            
+            fetch('/update-streams', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(streams)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('Streams saved successfully! Radio will restart...', 'success');
+                } else {
+                    showStatus('Error: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showStatus('Error saving streams: ' + error, 'error');
+            });
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '<div class="status ' + type + '">' + message + '</div>';
+            setTimeout(() => {
+                statusDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        function loadWeatherSettings() {
+            fetch('/get-weather-settings')
+                .then(response => response.json())
+                .then(data => {
+                    const apiKeyInput = document.getElementById('weatherApiKey');
+                    apiKeyInput.value = data.apiKey || '';
+                    
+                    // Store if this is a masked value
+                    apiKeyInput.dataset.isMasked = data.isConfigured ? 'true' : 'false';
+                    
+                    // Add placeholder text if masked
+                    if (data.isConfigured && data.apiKey.includes('*')) {
+                        apiKeyInput.placeholder = 'API key is configured (masked for security)';
+                    }
+                })
+                .catch(error => {
+                    console.log('Weather settings not available:', error);
+                });
+        }
+
+        function saveWeatherSettings() {
+            const apiKeyInput = document.getElementById('weatherApiKey');
+            const apiKey = apiKeyInput.value.trim();
+            
+            // If the field contains masked data and user hasn't changed it, don't save
+            if (apiKeyInput.dataset.isMasked === 'true' && apiKey.includes('*')) {
+                showStatus('API key is already configured. Enter a new key to change it.', 'error');
+                return;
+            }
+            
+            if (!apiKey) {
+                showStatus('Please enter a weather API key', 'error');
+                return;
+            }
+            
+            fetch('/update-weather-settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ apiKey: apiKey })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('Weather settings saved successfully!', 'success');
+                    // Reload the masked value after saving
+                    setTimeout(() => {
+                        loadWeatherSettings();
+                    }, 1000);
+                } else {
+                    showStatus('Error: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showStatus('Error saving weather settings: ' + error, 'error');
+            });
+        }
+    </script>
+</body>
+</html>
+)rawliteral";
+
+void initWebServer() {
+    // Load streams from file
+    loadStreamsFromFile();
+    
+    // Setup web server routes
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html; charset=UTF-8", htmlPage);
+    });
+    
+    server.on("/get-streams", HTTP_GET, [](AsyncWebServerRequest *request) {
+        DynamicJsonDocument doc(2048);
+        JsonArray array = doc.to<JsonArray>();
+        
+        for (int i = 0; i < webStreamCount; i++) {
+            JsonObject stream = array.createNestedObject();
+            stream["name"] = webStreams[i].name;
+            stream["url"] = webStreams[i].url;
+        }
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    server.on("/update-streams", HTTP_POST, [](AsyncWebServerRequest *request) {
+        // Empty handler - actual processing in body handler
+    }, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        DynamicJsonDocument doc(2048);
+        DeserializationError error = deserializeJson(doc, (char*)data);
+        
+        if (error) {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+            return;
+        }
+        
+        // Save to file
+        File file = SPIFFS.open("/streams.json", "w");
+        if (file) {
+            serializeJson(doc, file);
+            file.close();
+            
+            request->send(200, "application/json", "{\"success\":true,\"message\":\"Streams updated successfully\"}");
+            
+            // Restart ESP32 to reload streams
+            delay(1000);
+            ESP.restart();
+        } else {
+            request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to save streams\"}");
+        }
+    });
+    
+    // Weather settings endpoints
+    server.on("/get-weather-settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+        DynamicJsonDocument doc(512);
+        
+        // Mask the API key if it exists (show first 3 and last 3 chars)
+        String maskedApiKey = "";
+        if (weatherApiKey.length() > 6) {
+            maskedApiKey = weatherApiKey.substring(0, 3);
+            for (int i = 0; i < (int)(weatherApiKey.length() - 6); i++) {
+                maskedApiKey += "*";
+            }
+            maskedApiKey += weatherApiKey.substring(weatherApiKey.length() - 3);
+        } else if (weatherApiKey.length() > 0) {
+            for (int i = 0; i < (int)weatherApiKey.length(); i++) {
+                maskedApiKey += "*";
+            }
+        }
+        
+        doc["apiKey"] = maskedApiKey;
+        doc["isConfigured"] = weatherApiKey.length() > 0;
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    server.on("/update-weather-settings", HTTP_POST, [](AsyncWebServerRequest *request) {
+        // Empty handler - actual processing in body handler
+    }, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        DynamicJsonDocument doc(512);
+        DeserializationError error = deserializeJson(doc, (char*)data);
+        
+        if (error) {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+            return;
+        }
+        
+        const char* apiKey = doc["apiKey"];
+        if (apiKey) {
+            weatherApiKey = String(apiKey);
+            saveSettings(); // Save to EEPROM
+            request->send(200, "application/json", "{\"success\":true,\"message\":\"Weather settings saved\"}");
+        } else {
+            request->send(400, "application/json", "{\"success\":false,\"message\":\"Missing API key\"}");
+        }
+    });
+    
+    server.begin();
+    Serial.println("Web server started");
+    Serial.print("Open http://");
+    Serial.print(WiFi.localIP());
+    Serial.println(" in your browser to manage streams");
+}
+
+void handleWebServer() {
+    // AsyncWebServer handles requests automatically, no need to call handleClient()
+}
+
+void loadStreamsFromFile() {
+    File file = SPIFFS.open("/streams.json", "r");
+    if (!file) {
+        Serial.println("No streams.json file found, using default streams");
+        saveStreamsToFile(); // Create default file
+        return;
+    }
+    
+    DynamicJsonDocument doc(2048);
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+    
+    if (error) {
+        Serial.println("Failed to parse streams.json, using defaults");
+        saveStreamsToFile();
+        return;
+    }
+    
+    webStreamCount = 0;
+    JsonArray array = doc.as<JsonArray>();
+    for (JsonObject stream : array) {
+        if (webStreamCount >= MAX_WEB_STREAMS) break;
+        
+        const char* name = stream["name"];
+        const char* url = stream["url"];
+        
+        if (name && url) {
+            strncpy(webStreams[webStreamCount].name, name, 16);
+            webStreams[webStreamCount].name[16] = '\0'; // Ensure null termination
+            strncpy(webStreams[webStreamCount].url, url, 255);
+            webStreams[webStreamCount].url[255] = '\0'; // Ensure null termination
+            webStreamCount++;
+        }
+    }
+    
+    Serial.println("Streams loaded from JSON file");
+}
+
+void saveStreamsToFile() {
+    DynamicJsonDocument doc(2048);
+    JsonArray array = doc.to<JsonArray>();
+    
+    // If no streams loaded, create default ones (same as menu system)
+    if (webStreamCount == 0) {
+        // Default stream data
+        const char* defaultStreams[][2] = {
+            {"Jacaranda FM", "https://edge.iono.fm/xice/jacarandafm_live_medium.aac"},
+            {"Pretoria FM", "https://edge.iono.fm/xice/362_medium.aac"},
+            {"Lekker FM", "https://zas3.ndx.co.za:8002/stream"},
+            {"Groot FM", "https://edge.iono.fm/xice/330_medium.aac"},
+            {"RSG", "https://28553.live.streamtheworld.com/RSGAAC.aac"}
+        };
+        
+        for (int i = 0; i < 5; i++) {
+            JsonObject stream = array.createNestedObject();
+            stream["name"] = defaultStreams[i][0];
+            stream["url"] = defaultStreams[i][1];
+        }
+    } else {
+        // Save existing streams
+        for (int i = 0; i < webStreamCount; i++) {
+            JsonObject stream = array.createNestedObject();
+            stream["name"] = webStreams[i].name;
+            stream["url"] = webStreams[i].url;
+        }
+    }
+    
+    File file = SPIFFS.open("/streams.json", "w");
+    if (file) {
+        serializeJson(doc, file);
+        file.close();
+        Serial.println("Streams saved to JSON file");
+    } else {
+        Serial.println("Failed to save streams to file");
+    }
+}
