@@ -1307,7 +1307,6 @@ For technical support or questions about your OOSIE Internet Radio:
 
 *OOSIE Internet Radio User Manual v1.1*
 *Last Updated: August 2025*
-*Added: OTA Firmware Update System*
 
 
 
