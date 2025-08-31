@@ -8,10 +8,17 @@
 5. [Menu System](#menu-system)
 6. [Alarm System](#alarm-system)
 7. [Web Configuration Interface](#web-configuration-interface)
+   - 7.1 [Finding the IP Address](#71-finding-the-ip-address)
+   - 7.2 [Web Interface Layout](#72-web-interface-layout)
+   - 7.3 [Tab Navigation](#73-tab-navigation)
+   - 7.4 [Managing Radio Stations](#74-managing-radio-stations-stream-manager-tab)
+   - 7.5 [Weather Configuration](#75-weather-configuration-weather-settings-tab)
+   - 7.6 [User Manual](#76-user-manual-user-manual-tab)
 8. [Sleep Timer](#sleep-timer)
 9. [Weather Information](#weather-information)
-10. [Troubleshooting](#troubleshooting)
-11. [Technical Specifications](#technical-specifications)
+10. [Over-the-Air (OTA) Updates](#over-the-air-ota-updates)
+11. [Troubleshooting](#troubleshooting)
+12. [Technical Specifications](#technical-specifications)
 
 ---
 
@@ -700,10 +707,17 @@ The radio's IP address is displayed in the WiFi menu
 
 ### 7.2 Web Interface Layout
 
+The web interface features a modern tabbed design with three main sections:
+
 ```
 🎵 OOSIE Radio
-Internet Radio - Stream Manager
+Internet Radio - Management Interface
 
+┌─ Tab Navigation ───────────────────────────────────────────┐
+│ [📻 Stream Manager] [🌤️ Weather Settings] [📖 User Manual] │
+└────────────────────────────────────────────────────────────┘
+
+📻 STREAM MANAGER TAB:
 ┌─ Stream Management ────────────────────────────────────────┐
 │                                                            │
 │ Name (max 16 chars)    │ URL                    │ Actions  │
@@ -715,48 +729,103 @@ Internet Radio - Stream Manager
 │                    [💾 Save All Changes]                   │
 └────────────────────────────────────────────────────────────┘
 
+🌤️ WEATHER SETTINGS TAB:
 ┌─ Weather Configuration ────────────────────────────────────┐
+│                                                            │
+│ Get your free API key from OpenWeatherMap                  │
 │                                                            │
 │ Weather API Key: [abc***********xyz]                       │
 │                                                            │
 │               [💾 Save Weather Settings]                   │
 └────────────────────────────────────────────────────────────┘
+
+📖 USER MANUAL TAB:
+┌─ User Manual ──────────────────────────────────────────────┐
+│                                    [🔄 Refresh Manual]    │
+│ ┌─ Manual Content ─────────────────────────────────────────┐ │
+│ │ # OOSIE Internet Radio - User Manual                   │ │
+│ │                                                        │ │
+│ │ ## Table of Contents                                   │ │
+│ │ 1. Introduction                                        │ │
+│ │ 2. Hardware Overview                                   │ │
+│ │ ...                                                    │ │
+│ │ (Complete user manual content from GitHub)             │ │
+│ └────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────┘
 ```
 
-### 7.3 Managing Radio Stations
+### 7.3 Tab Navigation
+
+**Switching Between Tabs**:
+- Click any tab button to switch sections
+- Active tab is highlighted in green
+- Each tab maintains its own content and state
+
+**Tab Features**:
+- **Stream Manager**: Add, edit, delete radio stations
+- **Weather Settings**: Configure OpenWeatherMap API key
+- **User Manual**: View complete documentation (fetched live from GitHub)
+
+### 7.4 Managing Radio Stations (Stream Manager Tab)
 
 **Adding Stations**:
-1. Enter station name (maximum 16 characters)
-2. Enter stream URL (must start with http:// or https://)
-3. Click "Add Stream"
-4. Click "Save All Changes" to apply
+1. Click the "📻 Stream Manager" tab if not already selected
+2. Enter station name (maximum 16 characters) in the bottom row
+3. Enter stream URL (must start with http:// or https://)
+4. Click "Add Stream"
+5. Click "💾 Save All Changes" to apply
 
 **Editing Stations**:
-1. Modify name or URL directly in the table
-2. Click "Save All Changes" to apply
+1. Modify name or URL directly in the table rows
+2. Character count is shown below name fields (e.g., "12/16")
+3. Click "💾 Save All Changes" to apply
 
 **Deleting Stations**:
 1. Click "Delete" button next to unwanted station
-2. Confirm deletion
-3. Click "Save All Changes" to apply
+2. Confirm deletion in popup
+3. Click "💾 Save All Changes" to apply
 
 **Important Notes**:
-- Changes are not applied until "Save All Changes" is clicked
+- Changes are not applied until "💾 Save All Changes" is clicked
 - Radio will restart automatically after saving streams
 - At least one stream must remain in the list
+- Stream names exceeding 16 characters will show red warning
 
-### 7.4 Weather Configuration
+### 7.5 Weather Configuration (Weather Settings Tab)
 
 **Setting Up Weather**:
-1. Visit [OpenWeatherMap.org](https://openweathermap.org/api)
-2. Create free account and obtain API key
-3. Enter API key in the web interface
-4. Click "Save Weather Settings"
+1. Click the "🌤️ Weather Settings" tab
+2. Visit [OpenWeatherMap.org](https://openweathermap.org/api) to create free account
+3. Obtain your API key from the dashboard
+4. Enter API key in the web interface
+5. Click "💾 Save Weather Settings"
 
 **API Key Security**:
-- After saving, API key is masked: `abc***********xyz`
+- After saving, API key is masked for security: `abc***********xyz`
 - First 3 and last 3 characters remain visible
 - To change: clear field and enter new key
+- Masked keys show placeholder: "API key is configured (masked for security)"
+
+### 7.6 User Manual (User Manual Tab)
+
+**Accessing Documentation**:
+1. Click the "📖 User Manual" tab
+2. Manual loads automatically from GitHub repository
+3. Content is formatted with proper headings, lists, and code blocks
+4. Scrollable content area for easy navigation
+
+**Manual Features**:
+- **Live Content**: Always shows the latest version from GitHub
+- **Refresh Button**: Click "🔄 Refresh Manual" to reload content
+- **Offline Fallback**: Shows error message if GitHub is unavailable
+- **Formatted Display**: Markdown content converted to readable HTML
+
+**Manual Sections Include**:
+- Complete setup instructions
+- Menu system documentation
+- Alarm configuration guide
+- Troubleshooting tips
+- Technical specifications
 
 ---
 

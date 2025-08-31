@@ -24,6 +24,29 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: #333; text-align: center; margin-bottom: 10px; }
         h2 { color: #666; text-align: center; margin-top: 0; margin-bottom: 30px; font-weight: normal; }
+        
+        /* Tab Navigation Styles */
+        .tab-container { margin-bottom: 20px; }
+        .tab-nav { display: flex; border-bottom: 2px solid #4CAF50; margin-bottom: 20px; }
+        .tab-nav button { 
+            background: none; 
+            border: none; 
+            padding: 12px 24px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            color: #666; 
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .tab-nav button:hover { background-color: #f5f5f5; color: #333; }
+        .tab-nav button.active { 
+            color: #4CAF50; 
+            border-bottom-color: #4CAF50; 
+            font-weight: bold; 
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #4CAF50; color: white; }
@@ -41,14 +64,54 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .char-count { font-size: 12px; color: #666; }
         .over-limit { color: #f44336; font-weight: bold; }
+        
+        /* Manual Styles */
+        .manual-content { 
+            line-height: 1.6; 
+            max-height: 600px; 
+            overflow-y: auto; 
+            border: 1px solid #ddd; 
+            padding: 20px; 
+            background-color: #fafafa; 
+            border-radius: 5px; 
+        }
+        .manual-content h1, .manual-content h2, .manual-content h3 { 
+            color: #333; 
+            margin-top: 20px; 
+            margin-bottom: 10px; 
+        }
+        .manual-content code { 
+            background-color: #f1f1f1; 
+            padding: 2px 4px; 
+            border-radius: 3px; 
+            font-family: monospace; 
+        }
+        .manual-content pre { 
+            background-color: #f1f1f1; 
+            padding: 10px; 
+            border-radius: 5px; 
+            overflow-x: auto; 
+        }
+        .loading { text-align: center; padding: 40px; color: #666; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🎵 OOSIE Radio</h1>
-        <h2>Internet Radio - Stream Manager</h2>
+        <h2>Internet Radio - Management Interface</h2>
         <div id="status"></div>
         
+        <!-- Tab Navigation -->
+        <div class="tab-container">
+            <div class="tab-nav">
+                <button class="tab-button active" onclick="openTab(event, 'streams-tab')">📻 Stream Manager</button>
+                <button class="tab-button" onclick="openTab(event, 'weather-tab')">🌤️ Weather Settings</button>
+                <button class="tab-button" onclick="openTab(event, 'manual-tab')">📖 User Manual</button>
+            </div>
+        </div>
+        
+        <!-- Streams Tab -->
+        <div id="streams-tab" class="tab-content active">
         <table id="streamTable">
             <thead>
                 <tr>
@@ -78,9 +141,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         <div style="text-align: center; margin-top: 30px;">
             <button onclick="saveStreams()" style="font-size: 16px; padding: 12px 24px;">💾 Save All Changes</button>
         </div>
+        </div>
         
-        <!-- Weather Configuration Section -->
-        <div style="margin-top: 40px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+        <!-- Weather Tab -->
+        <div id="weather-tab" class="tab-content">
             <h3>🌤️ Weather Configuration</h3>
             <p>Get your free API key from <a href="https://openweathermap.org/api" target="_blank">OpenWeatherMap</a></p>
             <div style="margin-bottom: 15px;">
@@ -91,16 +155,49 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <button onclick="saveWeatherSettings()" style="background-color: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">💾 Save Weather Settings</button>
             </div>
         </div>
+        
+        <!-- User Manual Tab -->
+        <div id="manual-tab" class="tab-content">
+            <h3>📖 User Manual</h3>
+            <div style="text-align: right; margin-bottom: 10px;">
+                <button onclick="loadUserManual()" style="background-color: #6c757d; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">🔄 Refresh Manual</button>
+            </div>
+            <div id="manualContent" class="manual-content">
+                <div class="loading">Loading user manual...</div>
+            </div>
+        </div>
     </div>
 
     <script>
         let streams = [];
+
+        // Tab functionality
+        function openTab(evt, tabName) {
+            var i, tabcontent, tabbuttons;
+            
+            // Hide all tab contents
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].classList.remove("active");
+            }
+            
+            // Remove active class from all tab buttons
+            tabbuttons = document.getElementsByClassName("tab-button");
+            for (i = 0; i < tabbuttons.length; i++) {
+                tabbuttons[i].classList.remove("active");
+            }
+            
+            // Show the selected tab content and mark button as active
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.add("active");
+        }
 
         // Load streams on page load
         window.onload = function() {
             loadStreams();
             loadWeatherSettings();
             setupCharCounters();
+            loadUserManual();
         };
 
         function setupCharCounters() {
@@ -306,6 +403,66 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .catch(error => {
                 showStatus('Error saving weather settings: ' + error, 'error');
             });
+        }
+
+        function loadUserManual() {
+            const manualContent = document.getElementById('manualContent');
+            manualContent.innerHTML = '<div class="loading">Loading user manual...</div>';
+            
+            // Fetch the user manual from GitHub
+            const githubUrl = 'https://raw.githubusercontent.com/oosthub/Clock-Radio/main/USER_MANUAL.md';
+            
+            fetch(githubUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load user manual from GitHub');
+                    }
+                    return response.text();
+                })
+                .then(markdown => {
+                    // Simple markdown to HTML conversion
+                    const html = convertMarkdownToHtml(markdown);
+                    manualContent.innerHTML = html;
+                })
+                .catch(error => {
+                    manualContent.innerHTML = `
+                        <div style="color: #721c24; background-color: #f8d7da; padding: 15px; border-radius: 5px; border: 1px solid #f5c6cb;">
+                            <strong>Error loading user manual:</strong><br>
+                            ${error.message}<br><br>
+                            <small>Make sure the device has internet access and the GitHub repository is public.</small>
+                        </div>
+                    `;
+                });
+        }
+
+        function convertMarkdownToHtml(markdown) {
+            let html = markdown;
+            
+            // Convert headers
+            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+            
+            // Convert bold text
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Convert italic text
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            // Convert code blocks
+            html = html.replace(/```([^`]*)```/g, '<pre>$1</pre>');
+            
+            // Convert inline code
+            html = html.replace(/`([^`]*)`/g, '<code>$1</code>');
+            
+            // Convert line breaks
+            html = html.replace(/\n/g, '<br>');
+            
+            // Convert lists (simple version)
+            html = html.replace(/^\- (.*$)/gim, '<li>$1</li>');
+            html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+            
+            return html;
         }
     </script>
 </body>
