@@ -379,9 +379,18 @@ void loop() {
   static unsigned long lastWiFiReconnectAttempt = 0;
   static unsigned long reconnectStartTime = 0;
   static bool reconnecting = false;
+  static unsigned long lastWiFiStatusLog = 0;
   
   if (millis() - lastWiFiCheck > 30000) { // Check every 30 seconds
     lastWiFiCheck = millis();
+    
+    // Log WiFi status periodically (every 10 minutes when connected)
+    if (WiFi.status() == WL_CONNECTED && (millis() - lastWiFiStatusLog > 600000)) {
+      lastWiFiStatusLog = millis();
+      Serial.print("WiFi status OK - IP: ");
+      Serial.println(WiFi.localIP());
+    }
+    
     if (WiFi.status() != WL_CONNECTED) {
       if (!reconnecting) {
         Serial.println("WiFi connection lost - attempting reconnection...");
@@ -401,6 +410,7 @@ void loop() {
       Serial.println(WiFi.localIP());
       configureWiFiPowerManagement();
       reconnecting = false;
+      lastWiFiStatusLog = millis(); // Reset status log timer
     }
   }
   
