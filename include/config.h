@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 // Firmware version
-#define FIRMWARE_VERSION "1.1.0"
+#define FIRMWARE_VERSION "1.1.2"
 
 // Hardware pin definitions
 #define I2S_DOUT  2
