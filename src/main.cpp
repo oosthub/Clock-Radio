@@ -149,6 +149,9 @@ void setup() {
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
+  
+  // Configure WiFi power management to prevent disconnections
+  configureWiFiPowerManagement();
   Serial.println("");
   
   // Setup time after WiFi connection
@@ -370,6 +373,52 @@ void loop() {
   
   // Handle web server
   handleWebServer();
+  
+  // Monitor and maintain WiFi connection
+  static unsigned long lastWiFiCheck = 0;
+  static unsigned long lastWiFiReconnectAttempt = 0;
+  static unsigned long reconnectStartTime = 0;
+  static bool reconnecting = false;
+  static unsigned long lastWiFiStatusLog = 0;
+  
+  if (millis() - lastWiFiCheck > 30000) { // Check every 30 seconds
+    lastWiFiCheck = millis();
+    
+    // Log WiFi status periodically (every 10 minutes when connected)
+    if (WiFi.status() == WL_CONNECTED && (millis() - lastWiFiStatusLog > 600000)) {
+      lastWiFiStatusLog = millis();
+      Serial.print("WiFi status OK - IP: ");
+      Serial.println(WiFi.localIP());
+    }
+    
+    if (WiFi.status() != WL_CONNECTED) {
+      if (!reconnecting) {
+        Serial.println("WiFi connection lost - attempting reconnection...");
+        // Avoid too frequent reconnection attempts
+        if (millis() - lastWiFiReconnectAttempt > 60000) { // Only try every 60 seconds
+          lastWiFiReconnectAttempt = millis();
+          reconnectStartTime = millis();
+          reconnecting = true;
+          WiFi.disconnect();
+          WiFi.begin(ssid.c_str(), password.c_str());
+        }
+      }
+    } else if (reconnecting) {
+      // We were reconnecting and now we're connected
+      Serial.println("WiFi reconnected successfully");
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());
+      configureWiFiPowerManagement();
+      reconnecting = false;
+      lastWiFiStatusLog = millis(); // Reset status log timer
+    }
+  }
+  
+  // Check if reconnection is taking too long
+  if (reconnecting && (millis() - reconnectStartTime > 15000)) {
+    Serial.println("WiFi reconnection timeout, will retry later");
+    reconnecting = false;
+  }
   
   // Update weather data
   updateWeather();

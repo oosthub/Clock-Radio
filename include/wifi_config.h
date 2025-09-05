@@ -38,5 +38,6 @@ void startWiFiHotspot();
 void showHotspotInstructions();
 void stopWiFiHotspot();
 bool isHotspotActive();
+void configureWiFiPowerManagement();
 
 #endif

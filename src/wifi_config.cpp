@@ -149,6 +149,9 @@ bool connectToWiFi() {
   }
   
   if (WiFi.status() == WL_CONNECTED) {
+    // Configure WiFi power management to prevent disconnections
+    configureWiFiPowerManagement();
+    
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("WiFi Connected!");
@@ -425,4 +428,11 @@ void stopWiFiHotspot() {
 
 bool isHotspotActive() {
   return (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA);
+}
+
+void configureWiFiPowerManagement() {
+  WiFi.setSleep(false);           // Disable WiFi sleep mode
+  WiFi.setAutoReconnect(true);    // Enable automatic reconnection  
+  WiFi.persistent(true);          // Keep WiFi credentials in flash
+  Serial.println("WiFi power management configured - sleep disabled, auto-reconnect enabled");
 }
