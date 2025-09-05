@@ -374,18 +374,19 @@ void loop() {
   // Handle web server
   handleWebServer();
   
-  // Monitor and maintain WiFi connection
+  // Monitor and maintain WiFi connection (only when radio is off to avoid audio interruption)
   static unsigned long lastWiFiCheck = 0;
   static unsigned long lastWiFiReconnectAttempt = 0;
   static unsigned long reconnectStartTime = 0;
   static bool reconnecting = false;
   static unsigned long lastWiFiStatusLog = 0;
   
-  if (millis() - lastWiFiCheck > 30000) { // Check every 30 seconds
+  // Only perform WiFi monitoring when radio is not actively playing to prevent audio stuttering
+  if (!radioPowerOn && (millis() - lastWiFiCheck > 300000)) { // Check every 5 minutes when radio is off
     lastWiFiCheck = millis();
     
-    // Log WiFi status periodically (every 10 minutes when connected)
-    if (WiFi.status() == WL_CONNECTED && (millis() - lastWiFiStatusLog > 600000)) {
+    // Log WiFi status periodically (every 10 minutes when connected, but not during audio playback)
+    if (WiFi.status() == WL_CONNECTED && !radioPowerOn && (millis() - lastWiFiStatusLog > 600000)) {
       lastWiFiStatusLog = millis();
       Serial.print("WiFi status OK - IP: ");
       Serial.println(WiFi.localIP());
