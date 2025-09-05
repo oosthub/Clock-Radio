@@ -377,32 +377,37 @@ void loop() {
   // Monitor and maintain WiFi connection
   static unsigned long lastWiFiCheck = 0;
   static unsigned long lastWiFiReconnectAttempt = 0;
+  static unsigned long reconnectStartTime = 0;
+  static bool reconnecting = false;
+  
   if (millis() - lastWiFiCheck > 30000) { // Check every 30 seconds
     lastWiFiCheck = millis();
     if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("WiFi connection lost - attempting reconnection...");
-      // Avoid too frequent reconnection attempts
-      if (millis() - lastWiFiReconnectAttempt > 60000) { // Only try every 60 seconds
-        lastWiFiReconnectAttempt = millis();
-        WiFi.disconnect();
-        WiFi.begin(ssid.c_str(), password.c_str());
-        
-        // Wait a short time to see if connection succeeds
-        unsigned long reconnectStart = millis();
-        while (WiFi.status() != WL_CONNECTED && (millis() - reconnectStart < 10000)) {
-          delay(500);
-        }
-        
-        if (WiFi.status() == WL_CONNECTED) {
-          Serial.println("WiFi reconnected successfully");
-          Serial.print("IP address: ");
-          Serial.println(WiFi.localIP());
-          configureWiFiPowerManagement();
-        } else {
-          Serial.println("WiFi reconnection failed, will retry later");
+      if (!reconnecting) {
+        Serial.println("WiFi connection lost - attempting reconnection...");
+        // Avoid too frequent reconnection attempts
+        if (millis() - lastWiFiReconnectAttempt > 60000) { // Only try every 60 seconds
+          lastWiFiReconnectAttempt = millis();
+          reconnectStartTime = millis();
+          reconnecting = true;
+          WiFi.disconnect();
+          WiFi.begin(ssid.c_str(), password.c_str());
         }
       }
+    } else if (reconnecting) {
+      // We were reconnecting and now we're connected
+      Serial.println("WiFi reconnected successfully");
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());
+      configureWiFiPowerManagement();
+      reconnecting = false;
     }
+  }
+  
+  // Check if reconnection is taking too long
+  if (reconnecting && (millis() - reconnectStartTime > 15000)) {
+    Serial.println("WiFi reconnection timeout, will retry later");
+    reconnecting = false;
   }
   
   // Update weather data
