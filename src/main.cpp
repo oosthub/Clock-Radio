@@ -149,6 +149,9 @@ void setup() {
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
+  
+  // Configure WiFi power management to prevent disconnections
+  configureWiFiPowerManagement();
   Serial.println("");
   
   // Setup time after WiFi connection
@@ -370,6 +373,37 @@ void loop() {
   
   // Handle web server
   handleWebServer();
+  
+  // Monitor and maintain WiFi connection
+  static unsigned long lastWiFiCheck = 0;
+  static unsigned long lastWiFiReconnectAttempt = 0;
+  if (millis() - lastWiFiCheck > 30000) { // Check every 30 seconds
+    lastWiFiCheck = millis();
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("WiFi connection lost - attempting reconnection...");
+      // Avoid too frequent reconnection attempts
+      if (millis() - lastWiFiReconnectAttempt > 60000) { // Only try every 60 seconds
+        lastWiFiReconnectAttempt = millis();
+        WiFi.disconnect();
+        WiFi.begin(ssid.c_str(), password.c_str());
+        
+        // Wait a short time to see if connection succeeds
+        unsigned long reconnectStart = millis();
+        while (WiFi.status() != WL_CONNECTED && (millis() - reconnectStart < 10000)) {
+          delay(500);
+        }
+        
+        if (WiFi.status() == WL_CONNECTED) {
+          Serial.println("WiFi reconnected successfully");
+          Serial.print("IP address: ");
+          Serial.println(WiFi.localIP());
+          configureWiFiPowerManagement();
+        } else {
+          Serial.println("WiFi reconnection failed, will retry later");
+        }
+      }
+    }
+  }
   
   // Update weather data
   updateWeather();
