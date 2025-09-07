@@ -115,6 +115,7 @@ void nextMenuItem();
 void printCurrentMenu();
 void displayCurrentMenu();
 void selectStream();
+void connectToStream(int streamIndex);  // Helper function for clean stream connections
 void handleMenuEncoderClockwise(unsigned long currentTime);
 void handleMenuEncoderCounterClockwise(unsigned long currentTime);
 void handleMenuButtonPress();

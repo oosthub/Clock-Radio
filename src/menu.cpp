@@ -386,10 +386,7 @@ void selectStream() {
   
   // Only actually connect if radio is powered on
   if (radioPowerOn) {
-    audio.connecttohost(menuStreams[currentStream].url);
-    playingStream = currentStream;
-    isStreaming = true;
-    currentStreamName = menuStreams[currentStream].name;
+    connectToStream(currentStream);  // Use the helper function for consistent behavior
   } else {
     Serial.println("Radio is OFF - stream selection saved but not playing");
     isStreaming = false;

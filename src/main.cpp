@@ -17,6 +17,33 @@
 // Audio object
 Audio audio;
 
+// Helper function to ensure clean stream connection
+void connectToStream(int streamIndex) {
+  if (streamIndex < 0 || streamIndex >= menuStreamCount) {
+    Serial.println("Invalid stream index");
+    return;
+  }
+  
+  // Always stop current stream first to ensure clean connection
+  audio.stopSong();
+  delay(100); // Brief delay to ensure complete disconnection
+  
+  // Connect to the new stream
+  Serial.print("Connecting to stream: ");
+  Serial.println(menuStreams[streamIndex].name);
+  Serial.print("URL: ");
+  Serial.println(menuStreams[streamIndex].url);
+  
+  audio.connecttohost(menuStreams[streamIndex].url);
+  currentStream = streamIndex;
+  playingStream = streamIndex;
+  isStreaming = true;
+  currentStreamName = menuStreams[streamIndex].name;
+  
+  Serial.print("Connected to: ");
+  Serial.println(menuStreams[streamIndex].name);
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("ESP32-S3 Internet Radio Starting...");
@@ -195,12 +222,7 @@ void setup() {
   
   // Only start streaming if radio is powered on
   if (radioPowerOn && menuStreamCount > 0) {
-    audio.connecttohost(menuStreams[currentStream].url);
-    playingStream = currentStream;
-    isStreaming = true;
-    currentStreamName = menuStreams[currentStream].name;
-    Serial.print("Connected to: ");
-    Serial.println(menuStreams[currentStream].name);
+    connectToStream(currentStream);
   } else {
     isStreaming = false;
     if (menuStreamCount == 0) {
@@ -294,12 +316,7 @@ void loop() {
     
     if (radioPowerOn) {
       // Power on - start streaming
-      audio.connecttohost(menuStreams[currentStream].url);
-      playingStream = currentStream;
-      isStreaming = true;
-      currentStreamName = menuStreams[currentStream].name;
-      Serial.print("Connected to: ");
-      Serial.println(menuStreams[currentStream].name);
+      connectToStream(currentStream);
     } else {
       // Power off - stop streaming and cancel sleep timer
       audio.stopSong();

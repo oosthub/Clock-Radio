@@ -181,11 +181,7 @@ void startAlarm(int alarmIndex) {
   
   // Start playing the alarm station
   if (alarms[alarmIndex].stationIndex < menuStreamCount) {
-    currentStream = alarms[alarmIndex].stationIndex;
-    currentStreamName = String(menuStreams[currentStream].name);
-    audio.stopSong();
-    audio.connecttohost(menuStreams[currentStream].url);
-    isStreaming = true;
+    connectToStream(alarms[alarmIndex].stationIndex);  // Use helper function for consistent behavior
   }
   
   // Set initial alarm volume (don't modify global volume variable)
