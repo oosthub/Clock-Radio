@@ -24,6 +24,30 @@
 				"$gcc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Check Build",
+			"type": "shell",
+			"command": "C:\\Users\\berto\\.platformio\\penv\\Scripts\\platformio.exe",
+			"args": [
+				"run"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Verify Build Fix",
+			"type": "shell",
+			"command": "C:\\Users\\berto\\.platformio\\penv\\Scripts\\platformio.exe",
+			"args": [
+				"run"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
 		}
 	]
 }

@@ -23,10 +23,9 @@ void connectToStream(int streamIndex) {
     Serial.println("Invalid stream index");
     return;
   }
-  
-  // Always stop current stream first to ensure clean connection
+
   audio.stopSong();
-  delay(100); // Brief delay to ensure complete disconnection
+  delay(100);
   
   // Connect to the new stream
   Serial.print("Connecting to stream: ");
@@ -34,7 +33,24 @@ void connectToStream(int streamIndex) {
   Serial.print("URL: ");
   Serial.println(menuStreams[streamIndex].url);
   
-  audio.connecttohost(menuStreams[streamIndex].url);
+  // Build a cache-busting URL by appending a unique query parameter
+  ////////// cache-busting - START ///////////////////////////////////
+  String baseUrl = menuStreams[streamIndex].url;
+  String cacheBuster = "?nocache=" + String(millis());
+
+  // If the URL already has a query string, use '&' instead of '?'
+  if (baseUrl.indexOf('?') != -1) {
+    cacheBuster = "&nocache=" + String(millis());
+  }
+
+  String streamUrl = baseUrl + cacheBuster;
+  Serial.print("Final stream URL: ");
+  Serial.println(streamUrl);
+
+  audio.connecttohost(streamUrl.c_str());
+  ////////// cache-busting - End ///////////////////////////////////
+    //audio.connecttohost(menuStreams[streamIndex].url);
+
   currentStream = streamIndex;
   playingStream = streamIndex;
   isStreaming = true;
