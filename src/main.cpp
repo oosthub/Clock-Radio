@@ -17,6 +17,10 @@
 // Audio object
 Audio audio;
 
+// Stream health and reconnection variables
+unsigned long lastStreamReconnect = 0;
+const unsigned long STREAM_RECONNECT_INTERVAL = 15 * 60 * 1000; // 15 minutes
+
 // Helper function to ensure clean stream connection
 void connectToStream(int streamIndex) {
   if (streamIndex < 0 || streamIndex >= menuStreamCount) {
@@ -55,6 +59,9 @@ void connectToStream(int streamIndex) {
   playingStream = streamIndex;
   isStreaming = true;
   currentStreamName = menuStreams[streamIndex].name;
+  
+  // Reset stream reconnection timer
+  lastStreamReconnect = millis();
   
   Serial.print("Connected to: ");
   Serial.println(menuStreams[streamIndex].name);
@@ -234,6 +241,11 @@ void setup() {
   alarmSystemActive = true;
   
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+  
+  // Configure audio buffer and connection settings for better streaming stability
+  audio.setConnectionTimeout(30000, 5000); // 30s connect timeout, 5s data timeout
+  audio.forceMono(false); // Ensure proper stereo handling
+  
   audio.setVolume(volume);
   
   // Only start streaming if radio is powered on
@@ -456,6 +468,13 @@ void loop() {
   
   // Update weather data
   updateWeather();
+  
+  // Periodic stream reconnection to prevent 30-minute timeouts
+  if (radioPowerOn && isStreaming && 
+      (millis() - lastStreamReconnect >= STREAM_RECONNECT_INTERVAL)) {
+    Serial.println("Preventive stream reconnection (25 min)");
+    connectToStream(currentStream);
+  }
   
   // Check sleep timer
   checkSleepTimer();
