@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 // Firmware version
-#define FIRMWARE_VERSION "1.1.6"
+#define FIRMWARE_VERSION "1.1.7"
 
 // Hardware pin definitions
 #define I2S_DOUT  2
@@ -26,6 +26,7 @@
 #define LCD_UPDATE_INTERVAL 1000
 #define VOLUME_DISPLAY_TIMEOUT 5000
 #define BACKLIGHT_TIMEOUT 5000
+#define LONG_PRESS_DURATION 2000
 
 // EEPROM settings
 #define EEPROM_SIZE 512

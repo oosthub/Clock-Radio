@@ -16,6 +16,11 @@ extern unsigned long lastActivity;
 extern bool displayJustWokenUp;
 extern unsigned long displayWakeTime;
 
+// Radio startup display control
+extern bool radioJustTurnedOn;
+extern bool waitingForStreamStart;
+extern unsigned long radioTurnOnTime;
+
 // Import menu variables for time editing check
 extern bool editingTime;
 extern bool editingHours;

@@ -344,9 +344,17 @@ void loop() {
     
     if (radioPowerOn) {
       // Power on - start streaming
+      radioJustTurnedOn = true;
+      waitingForStreamStart = true;
+      radioTurnOnTime = millis();
+      // Turn on display immediately and don't start auto-off timer yet
+      lcd.backlight();
       connectToStream(currentStream);
     } else {
       // Power off - stop streaming and cancel sleep timer
+      radioJustTurnedOn = false;
+      waitingForStreamStart = false;
+      radioTurnOnTime = 0;
       audio.stopSong();
       isStreaming = false;
       if (sleepTimerActive) {
@@ -378,7 +386,7 @@ void loop() {
   }
   
   // Handle auto-off backlight timeout (only in auto-off mode)
-  if (!backlightAlwaysOn && !inMenu) {
+  if (!backlightAlwaysOn && !inMenu && !waitingForStreamStart) {
     if (millis() - lastActivity > BACKLIGHT_TIMEOUT) {
       lcd.noBacklight();
       displayJustWokenUp = false; // Reset wake-up state when display times out
@@ -469,6 +477,16 @@ void loop() {
   // Update weather data
   updateWeather();
   
+  // Safety timeout for stream startup (if stream doesn't start within 15 seconds)
+  if (waitingForStreamStart && radioJustTurnedOn) {
+    if (millis() - radioTurnOnTime > 15000) { // 15 seconds timeout
+      Serial.println("Stream startup timeout - beginning auto-off timer anyway");
+      waitingForStreamStart = false;
+      radioJustTurnedOn = false;
+      lastActivity = millis(); // Start the 5-second timer now
+    }
+  }
+  
   // Periodic stream reconnection to prevent 30-minute timeouts
   if (radioPowerOn && isStreaming && 
       (millis() - lastStreamReconnect >= STREAM_RECONNECT_INTERVAL)) {
@@ -498,6 +516,14 @@ void audio_eof_mp3(const char *info) {
 }
 void audio_showstation(const char *info) {
   Serial.print("station     "); Serial.println(info);
+  
+  // If we were waiting for stream to start after turning on radio
+  if (waitingForStreamStart && radioJustTurnedOn) {
+    Serial.println("Stream started - beginning auto-off timer");
+    waitingForStreamStart = false;
+    radioJustTurnedOn = false;
+    lastActivity = millis(); // Start the 5-second timer now
+  }
   
   // Reset track info when station changes
   hasTrackInfo = false;

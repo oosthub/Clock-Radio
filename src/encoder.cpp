@@ -88,14 +88,14 @@ bool checkButtonPress() {
     buttonWasPressed = false;
     buttonPressStart = 0;
     
-    // Only report short press if it was less than 3 seconds and not already reported
-    if (pressDuration < 3000 && !shortPressReported) {
+    // Only report short press if it was less than long press duration and not already reported
+    if (pressDuration < LONG_PRESS_DURATION && !shortPressReported) {
       Serial.println("Short button press detected!");
       return true;
     }
   } else if (currentButtonState == LOW && buttonWasPressed && !shortPressReported) {
     // Button still pressed, check for long press
-    if (millis() - buttonPressStart >= 3000) {
+    if (millis() - buttonPressStart >= LONG_PRESS_DURATION) {
       shortPressReported = true; // Prevent short press from triggering
       // Don't return true here - this will be handled by checkLongButtonPress
     }
@@ -123,7 +123,7 @@ bool checkLongButtonPress() {
     longPressReported = false;
   } else if (currentButtonState == LOW && buttonWasPressed && !longPressReported) {
     // Button still pressed, check duration
-    if (millis() - buttonPressStart >= 3000) {
+    if (millis() - buttonPressStart >= LONG_PRESS_DURATION) {
       // Long press detected
       longPressReported = true; // Prevent multiple triggers
       Serial.println("Long button press detected!");

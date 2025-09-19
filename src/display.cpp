@@ -21,6 +21,11 @@ unsigned long lastActivity = 0;
 bool displayJustWokenUp = false;
 unsigned long displayWakeTime = 0;
 
+// Radio startup display control
+bool radioJustTurnedOn = false;
+bool waitingForStreamStart = false;
+unsigned long radioTurnOnTime = 0;
+
 // Now Playing Info variables
 String currentTrackInfo = "";
 bool hasTrackInfo = false;
