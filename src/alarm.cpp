@@ -169,7 +169,7 @@ void startAlarm(int alarmIndex) {
   alarms[alarmIndex].isActive = true;
   alarms[alarmIndex].alarmStart = millis(); // Record when alarm started
   alarmFadeStart = millis();
-  alarmCurrentVolume = 5; // Start very quiet
+  alarmCurrentVolume = 0; // Start at silence
   
   // Save user's current volume before alarm
   userOriginalVolume = volume;
@@ -206,17 +206,17 @@ void updateAlarmFade() {
   unsigned long fadeTime = millis() - alarmFadeStart;
   unsigned long totalFadeTime = ALARM_FADE_SECONDS * 1000;
   
+  int maxVol = alarms[activeAlarmIndex].maxVolume;
+  
   if (fadeTime < totalFadeTime) {
-    // Calculate fade volume (5 to maxVolume over ALARM_FADE_SECONDS)
-    int maxVol = alarms[activeAlarmIndex].maxVolume;
-    int volumeRange = maxVol - 5;
-    alarmCurrentVolume = 5 + (volumeRange * fadeTime) / totalFadeTime;
+    // Calculate fade volume from 0 to maxVolume over ALARM_FADE_SECONDS
+    alarmCurrentVolume = (maxVol * fadeTime) / totalFadeTime;
     
     // Update audio volume directly (don't modify global volume variable)
     audio.setVolume(alarmCurrentVolume);
   } else {
     // Fade complete, set to max volume
-    alarmCurrentVolume = alarms[activeAlarmIndex].maxVolume;
+    alarmCurrentVolume = maxVol;
     audio.setVolume(alarmCurrentVolume);
   }
 }
