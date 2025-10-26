@@ -48,6 +48,18 @@
 				"$gcc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Build Sleep Timer Fix",
+			"type": "shell",
+			"command": "C:\\Users\\berto\\.platformio\\penv\\Scripts\\platformio.exe",
+			"args": [
+				"run"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
 		}
 	]
 }

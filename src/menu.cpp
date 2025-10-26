@@ -43,6 +43,9 @@ int menuStreamCount = 0;
 // External audio object (defined in main.cpp)
 extern Audio audio;
 
+// External stream reconnection timer (defined in main.cpp)
+extern unsigned long lastStreamReconnect;
+
 void createDefaultStreamsFile() {
   DynamicJsonDocument doc(2048);
   JsonArray array = doc.to<JsonArray>();
@@ -741,6 +744,16 @@ void setSleepTimer(int minutes) {
   sleepTimerDuration = minutes * 60 * 1000; // Convert minutes to milliseconds
   sleepTimerActive = true;
   
+  // If radio is streaming, perform immediate reconnection to ensure fresh connection
+  // This prevents potential issues with stale connections during sleep period
+  if (radioPowerOn && isStreaming) {
+    Serial.println("Sleep timer: Performing fresh stream connection");
+    connectToStream(currentStream);
+  } else {
+    // If not streaming, just reset the timer to prevent future timing collision
+    lastStreamReconnect = millis();
+  }
+  
   Serial.print("Sleep timer set for ");
   Serial.print(minutes);
   Serial.println(" minutes");
@@ -752,6 +765,7 @@ void checkSleepTimer() {
     Serial.println("Sleep timer expired - turning off radio");
     radioPowerOn = false;
     audio.stopSong();
+    isStreaming = false;  // Fix: Properly reset streaming state
     sleepTimerActive = false;
     forceImmediateLcdUpdate = true;
   }
